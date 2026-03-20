@@ -1,5 +1,9 @@
+import { Resend } from "resend";
+import type { PagesFunction, D1Database } from "@cloudflare/workers-types";
+
 interface Env {
   DB: D1Database;
+  RESEND_API_KEY: string;
 }
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
@@ -20,14 +24,14 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     if (!businessName || !rut || !address || !phone || !businessType) {
       return new Response(
         JSON.stringify({ error: "Todos los campos son obligatorios." }),
-        { status: 400, headers: { "Content-Type": "application/json" } }
+        { status: 400, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } }
       );
     }
 
     if (rut.length < 8 || rut.length > 12) {
       return new Response(
         JSON.stringify({ error: "RUT inválido." }),
-        { status: 400, headers: { "Content-Type": "application/json" } }
+        { status: 400, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } }
       );
     }
 
@@ -37,7 +41,36 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
        VALUES (?, ?, ?, ?, ?)`
     ).bind(businessName, rut, address, phone, businessType).run();
 
-    console.log("[D1] Lead B2B insertado:", result);
+    console.log("[D1] Lead B2B insertado:", result.meta.last_row_id);
+
+    // Fire & Forget: Send Email via Resend
+    if (env.RESEND_API_KEY) {
+      context.waitUntil((async () => {
+        try {
+          const resend = new Resend(env.RESEND_API_KEY);
+          await resend.emails.send({
+            from: "SMG Onboarding <onboarding@resend.dev>",
+            to: "administracion@biteradigital.com",
+            subject: `🚀 Alta Comercial: ${businessName} (${businessType})`,
+            html: `
+              <h2>Nuevo Lead B2B Capturado</h2>
+              <p>Un nuevo cliente ha completado el formulario de alta comercial en la Landing Page.</p>
+              <ul>
+                <li><strong>Razón Social/Local:</strong> ${businessName}</li>
+                <li><strong>RUT:</strong> ${rut}</li>
+                <li><strong>Dirección:</strong> ${address}</li>
+                <li><strong>Teléfono:</strong> ${phone}</li>
+                <li><strong>Rubro:</strong> ${businessType}</li>
+              </ul>
+              <p>Revisa la base de datos D1 en Cloudflare para más detalles.</p>
+            `,
+          });
+          console.log("[Resend] Email de notificación enviado exitosamente.");
+        } catch (emailError) {
+          console.error("[Resend] Fallo al enviar email:", emailError);
+        }
+      })());
+    }
 
     return new Response(
       JSON.stringify({
@@ -53,10 +86,10 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       }
     );
   } catch (error) {
-    console.error("[D1] Error insertando lead:", error);
+    console.error("[D1] Error crítico insertando lead:", error);
     return new Response(
       JSON.stringify({ error: "Error interno del servidor." }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
+      { status: 500, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } }
     );
   }
 };
