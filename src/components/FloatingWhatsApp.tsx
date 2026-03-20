@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { track } from "@vercel/analytics";
 import WhatsAppIcon from "./WhatsAppIcon";
 import { whatsappLink, WHATSAPP_MESSAGES } from "@/lib/constants";
 
@@ -27,6 +28,7 @@ export default function FloatingWhatsApp() {
       target="_blank"
       rel="noopener noreferrer"
       aria-label="Contactar por WhatsApp"
+      onClick={() => track("whatsapp_click", { location: "floating_widget", type: "general" })}
       className={`fixed bottom-6 right-6 z-[100] flex items-center justify-center w-14 h-14 bg-[#25D366] rounded-full shadow-[0_8px_32px_rgba(37,211,102,0.45)] transition-all duration-300 hover:scale-[1.1] hover:shadow-[0_12px_40px_rgba(37,211,102,0.55)] ${
         isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-10 pointer-events-none"
       }

@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import { ArrowRight } from "lucide-react";
+import { track } from "@vercel/analytics";
 import WhatsAppIcon from "./WhatsAppIcon";
 import { whatsappLink, WHATSAPP_MESSAGES } from "@/lib/constants";
 
@@ -46,6 +47,7 @@ export default function CTAFinal() {
               href={whatsappLink(WHATSAPP_MESSAGES.order)}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={() => track("whatsapp_click", { location: "cta_final", type: "order" })}
               className="group inline-flex items-center gap-3 bg-[var(--orange)] text-white font-bold text-[1rem] px-8 py-4.5 rounded-full shadow-[0_8px_40px_rgba(244,121,32,0.35)] transition-all duration-300 hover:shadow-[0_16px_56px_rgba(244,121,32,0.5)] hover:translate-y-[-3px]"
             >
               <WhatsAppIcon className="w-5 h-5 fill-white shrink-0" />

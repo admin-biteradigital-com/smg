@@ -20,30 +20,58 @@ const instrumentSerif = Instrument_Serif({
 });
 
 export const metadata: Metadata = {
-  title: "SMG — Bueno, Rico y Barato | Distribución de Golosinas, Los Lagos",
+  title: "SMG — Bueno, Rico y Barato | Distribución de Golosinas en Los Lagos",
   description:
-    "Distribución de golosinas y snacks en la Región de Los Lagos. Frutillar, Llanquihue, Puerto Varas, Puerto Montt y Carretera Austral hasta Hornopirén. Autoventa directa, precios competitivos, variedad garantizada.",
+    "Distribución de golosinas y snacks al por mayor en la Región de Los Lagos. Abastecemos Frutillar, Puerto Varas, Puerto Montt y la Carretera Austral hasta Hornopirén. Facturación y Autoventa.",
   keywords: [
-    "golosinas",
-    "snacks",
-    "distribución",
-    "Los Lagos",
-    "Chile",
-    "Carretera Austral",
-    "mayorista",
-    "kiosco",
-    "minimarket",
-    "Trento",
-    "Kryzpo",
-    "SMG",
+    "golosinas", "snacks", "distribuidora mayorista", "Los Lagos",
+    "Carretera Austral", "kioscos", "minimarkets", "SMG",
   ],
+  metadataBase: new URL("https://smg.biteradigital.com"),
+  alternates: {
+    canonical: "/",
+  },
   openGraph: {
     title: "SMG Distribuciones — Bueno, Rico y Barato",
-    description:
-      "Distribución directa de golosinas y snacks en la Región de Los Lagos.",
-    type: "website",
+    description: "Distribución directa al por mayor de golosinas y snacks comerciales en la Región de Los Lagos.",
+    url: "https://smg.biteradigital.com",
+    siteName: "SMG Distribuciones",
+    images: [
+      {
+        url: "/assets/portada.png",
+        width: 1200,
+        height: 630,
+        alt: "SMG Distribuciones Portada",
+      },
+    ],
     locale: "es_CL",
+    type: "website",
   },
+  twitter: {
+    card: "summary_large_image",
+    title: "SMG Distribuciones",
+    description: "Autoventa directa de golosinas en la Región de Los Lagos.",
+  },
+};
+
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@type": "LocalBusiness",
+  "name": "SMG Distribuciones",
+  "image": "https://smg.biteradigital.com/assets/logo.png",
+  "description": "Distribuidora mayorista de snacks, golosinas y abarrotes en la Región de Los Lagos, Chile con rutas por la Carretera Austral.",
+  "url": "https://smg.biteradigital.com",
+  "telephone": "+56985144771",
+  "address": {
+    "@type": "PostalAddress",
+    "addressLocality": "Puerto Montt (Chamiza)",
+    "addressRegion": "Región de Los Lagos",
+    "addressCountry": "CL"
+  },
+  "areaServed": [
+    "Frutillar", "Llanquihue", "Puerto Varas", "Puerto Montt", "Quillaipe",
+    "Lenca", "La Arena", "Caleta Puelche", "Contao", "Hornopirén"
+  ]
 };
 
 export default function RootLayout({
@@ -53,6 +81,12 @@ export default function RootLayout({
 }) {
   return (
     <html lang="es" className={`${sora.variable} ${instrumentSerif.variable}`}>
+      <head>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
+      </head>
       <body className="antialiased">
         {children}
         <FloatingWhatsApp />

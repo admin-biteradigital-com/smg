@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { motion } from "framer-motion";
 import { ArrowRight } from "lucide-react";
+import { track } from "@vercel/analytics";
 import WhatsAppIcon from "./WhatsAppIcon";
 import { whatsappLink, WHATSAPP_MESSAGES, STATS } from "@/lib/constants";
 
@@ -64,6 +65,7 @@ export default function Hero() {
               href={whatsappLink(WHATSAPP_MESSAGES.firstOrder)}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={() => track("whatsapp_click", { location: "hero_primary", type: "first_order" })}
               className="group inline-flex items-center gap-3 bg-[var(--orange)] text-white font-bold text-[0.95rem] px-7 py-4 rounded-full shadow-[0_8px_32px_rgba(244,121,32,0.3)] transition-all duration-300 hover:shadow-[0_12px_44px_rgba(244,121,32,0.45)] hover:translate-y-[-2px]"
             >
               <WhatsAppIcon className="w-5 h-5 fill-white shrink-0" />
@@ -74,6 +76,7 @@ export default function Hero() {
               href={whatsappLink(WHATSAPP_MESSAGES.general)}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={() => track("whatsapp_click", { location: "hero_secondary", type: "consultation" })}
               className="inline-flex items-center gap-2 text-[var(--muted)] hover:text-white text-[0.88rem] font-medium transition-colors"
             >
               Solo quiero consultar

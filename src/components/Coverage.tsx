@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import { MapPin } from "lucide-react";
+import { track } from "@vercel/analytics";
 import { ZONES, whatsappLink, WHATSAPP_MESSAGES } from "@/lib/constants";
 
 export default function Coverage() {
@@ -36,6 +37,7 @@ export default function Coverage() {
               href={whatsappLink(WHATSAPP_MESSAGES.coverage)}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={() => track("whatsapp_click", { location: "coverage", type: "zone_inquiry" })}
               className="inline-flex items-center gap-2 text-[var(--orange)] hover:text-[#FFB366] text-[0.88rem] font-bold transition-colors"
             >
               <MapPin className="w-4 h-4" />
