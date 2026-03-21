@@ -24,9 +24,10 @@ const REASONS = [
 
 export default function WhyUs() {
   return (
-    <section className="relative py-28 overflow-hidden bg-[var(--navy-deep)]">
-      {/* ── Panoramic background ── */}
-      <div className="absolute inset-0 z-0 bg-[url('/assets/frutillar_view.png')] bg-cover bg-bottom bg-no-repeat opacity-20 mix-blend-overlay" />
+    <section className="relative py-28 bg-[var(--navy-mid)] overflow-hidden">
+      {/* ── Background ── */}
+      <div className="absolute inset-0 z-0 bg-[url('/assets/frutillar_view.png')] bg-cover bg-bottom bg-no-repeat opacity-[0.35]" />
+      <div className="absolute inset-0 bg-[var(--navy-mid)]/80 z-0" />
       <div className="absolute inset-0 bg-gradient-to-b from-[var(--navy-deep)] via-transparent to-[var(--navy-deep)] z-0" />
 
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] bg-[var(--orange)] opacity-[0.05] rounded-full blur-[120px] pointer-events-none z-0" />

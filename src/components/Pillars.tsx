@@ -37,8 +37,9 @@ const item = {
 export default function Pillars() {
   return (
     <section className="relative py-28 overflow-hidden bg-[var(--navy-deep)]">
-      {/* ── Panoramic background ── */}
-      <div className="absolute inset-0 z-0 bg-[url('/assets/pillars_rio.png')] bg-cover bg-bottom bg-no-repeat opacity-[0.15] mix-blend-screen" />
+      {/* ── Background ── */}
+      <div className="absolute inset-0 z-0 bg-[url('/assets/pillars_rio.png')] bg-cover bg-bottom bg-no-repeat opacity-[0.35]" />
+      <div className="absolute inset-0 bg-[var(--navy-deep)]/80 z-0" />
       <div className="absolute inset-0 bg-gradient-to-b from-[var(--navy-deep)] via-transparent to-[var(--navy-deep)] z-0" />
 
       {/* Background accent */}

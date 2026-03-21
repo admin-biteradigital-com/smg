@@ -21,7 +21,7 @@ const instrumentSerif = Instrument_Serif({
 
 export const metadata: Metadata = {
   title: "SMG — Bueno, Rico y Barato",
-  description: "SMG por Sebastian Marin Giacomino",
+  description: "Distribuidora oficial SMG. Descubre nuestro catálogo completo de golosinas y marcas líderes en Los Lagos. ¡Haz tu pedido mayorista ahora y súmate a nuestras rutas semanales!",
   keywords: [
     "golosinas", "snacks", "distribuidora mayorista", "Los Lagos",
     "Carretera Austral", "kioscos", "minimarkets", "SMG",
@@ -32,15 +32,15 @@ export const metadata: Metadata = {
   },
   openGraph: {
     title: "SMG — Bueno, Rico y Barato",
-    description: "Distribución directa al por mayor de golosinas y snacks comerciales en la Región de Los Lagos.",
+    description: "Distribuidora oficial SMG. Únete a nuestra ruta de distribución en Los Lagos. Precios mayoristas, primeras marcas y atención directa.",
     url: "https://smg.biteradigital.com",
     siteName: "SMG",
     images: [
       {
-        url: "/assets/portada.webp",
+        url: "/assets/portada_og.png",
         width: 1200,
         height: 630,
-        alt: "SMG Distribuciones Portada",
+        alt: "SMG Portada",
       },
     ],
     locale: "es_CL",
@@ -49,7 +49,8 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "SMG",
-    description: "Autoventa directa de golosinas en la Región de Los Lagos.",
+    description: "Distribuidora oficial SMG. Únete a nuestra ruta de distribución en Los Lagos y haz tu pedido mayorista.",
+    images: ["/assets/portada_og.png"],
   },
 };
 
