@@ -1,4 +1,3 @@
-import { Resend } from "resend";
 import type { PagesFunction, D1Database } from "@cloudflare/workers-types";
 
 interface Env {
@@ -25,14 +24,14 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       return new Response(
         JSON.stringify({ error: "Todos los campos son obligatorios." }),
         { status: 400, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } }
-      );
+      ) as unknown as globalThis.Response;
     }
 
     if (rut.length < 8 || rut.length > 12) {
       return new Response(
         JSON.stringify({ error: "RUT inválido." }),
         { status: 400, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } }
-      );
+      ) as unknown as globalThis.Response;
     }
 
     // Insert lead into D1
@@ -43,39 +42,58 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     console.log("[D1] Lead B2B insertado:", result.meta.last_row_id);
 
-    // Fire & Forget: Send Email via Resend
+    // Send Email via Resend natively (bypass SDK Edge bugs)
+    let emailStatus = "Saltado (No hay API Key configurada)";
+    
     if (env.RESEND_API_KEY) {
-      context.waitUntil((async () => {
-        try {
-          const resend = new Resend(env.RESEND_API_KEY);
-          await resend.emails.send({
-            from: "SMG Onboarding <onboarding@resend.dev>",
-            to: "administracion@biteradigital.com",
-            subject: `🚀 Alta Comercial: ${businessName} (${businessType})`,
-            html: `
-              <h2>Nuevo Lead B2B Capturado</h2>
-              <p>Un nuevo cliente ha completado el formulario de alta comercial en la Landing Page.</p>
-              <ul>
-                <li><strong>Razón Social/Local:</strong> ${businessName}</li>
-                <li><strong>RUT:</strong> ${rut}</li>
-                <li><strong>Dirección:</strong> ${address}</li>
-                <li><strong>Teléfono:</strong> ${phone}</li>
-                <li><strong>Rubro:</strong> ${businessType}</li>
-              </ul>
-              <p>Revisa la base de datos D1 en Cloudflare para más detalles.</p>
-            `,
-          });
-          console.log("[Resend] Email de notificación enviado exitosamente.");
-        } catch (emailError) {
-          console.error("[Resend] Fallo al enviar email:", emailError);
+      try {
+        const emailPayload = {
+          from: "SMG Onboarding <onboarding@resend.dev>",
+          to: "administracion@biteradigital.com", // This MUST match the Resend verified email
+          subject: `🚀 Alta Comercial: ${businessName} (${businessType})`,
+          html: `
+            <h2>Nuevo Lead B2B Capturado</h2>
+            <p>Un nuevo cliente ha completado el formulario de alta comercial en la Landing Page.</p>
+            <ul>
+              <li><strong>Razón Social/Local:</strong> ${businessName}</li>
+              <li><strong>RUT:</strong> ${rut}</li>
+              <li><strong>Dirección:</strong> ${address}</li>
+              <li><strong>Teléfono:</strong> ${phone}</li>
+              <li><strong>Rubro:</strong> ${businessType}</li>
+            </ul>
+            <p>Revisa la base de datos D1 en Cloudflare para más detalles.</p>
+          `,
+        };
+
+        const res = await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${env.RESEND_API_KEY}`
+          },
+          body: JSON.stringify(emailPayload)
+        });
+
+        const data = (await res.json()) as Record<string, unknown>;
+
+        if (!res.ok) {
+          console.error("[Resend] API Error:", data);
+          emailStatus = `Fallo HTTP Resend: ${data.message || res.statusText}`;
+        } else {
+          console.log("[Resend] Email de notificación enviado exitosamente.", data);
+          emailStatus = `Enviado OK (ID: ${data.id})`;
         }
-      })());
+      } catch (emailError: unknown) {
+        console.error("[Resend] Excepción Fatal al enviar email:", emailError);
+        emailStatus = `Excepción Fetch: ${emailError instanceof Error ? emailError.message : String(emailError)}`;
+      }
     }
 
     return new Response(
       JSON.stringify({
         message: "Lead registrado exitosamente.",
         leadId: result.meta.last_row_id,
+        email_status: emailStatus
       }),
       {
         status: 201,
@@ -84,13 +102,13 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
           "Access-Control-Allow-Origin": "*",
         },
       }
-    );
-  } catch (error) {
+    ) as unknown as globalThis.Response;
+  } catch (error: unknown) {
     console.error("[D1] Error crítico insertando lead:", error);
     return new Response(
       JSON.stringify({ error: "Error interno del servidor." }),
       { status: 500, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } }
-    );
+    ) as unknown as globalThis.Response;
   }
 };
 
@@ -103,5 +121,5 @@ export const onRequestOptions: PagesFunction = async () => {
       "Access-Control-Allow-Methods": "POST, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type",
     },
-  });
+  }) as unknown as globalThis.Response;
 };

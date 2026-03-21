@@ -38,7 +38,7 @@ export const metadata: Metadata = {
     siteName: "SMG Distribuciones",
     images: [
       {
-        url: "/assets/portada.png",
+        url: "/assets/portada.webp",
         width: 1200,
         height: 630,
         alt: "SMG Distribuciones Portada",
@@ -58,7 +58,8 @@ const jsonLd = {
   "@context": "https://schema.org",
   "@type": "LocalBusiness",
   "name": "SMG Distribuciones",
-  "image": "https://smg.biteradigital.com/assets/logo.png",
+  "logo": "https://smg.biteradigital.com/assets/logo.webp",
+  "image": "https://smg.biteradigital.com/assets/logo.webp",
   "description": "Distribuidora mayorista de snacks, golosinas y abarrotes en la Región de Los Lagos, Chile con rutas por la Carretera Austral.",
   "url": "https://smg.biteradigital.com",
   "telephone": "+56985144771",

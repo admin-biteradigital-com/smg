@@ -26,7 +26,7 @@ export default function Navbar() {
     >
       <div className="max-w-[1200px] mx-auto px-6 flex items-center justify-between h-[72px]">
         <Image
-          src="/assets/portada.png"
+          src="/assets/portada.webp"
           alt="SMG Distribuciones"
           width={130}
           height={38}

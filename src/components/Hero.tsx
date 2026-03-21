@@ -120,7 +120,7 @@ export default function Hero() {
             <div className="absolute inset-0 rounded-full glass" />
             {/* Profile image */}
             <Image
-              src="/assets/perfil.png"
+              src="/assets/perfil.webp"
               alt="SMG Distribuciones — Perfil"
               fill
               className="object-cover rounded-full p-3"
