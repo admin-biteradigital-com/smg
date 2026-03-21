@@ -14,8 +14,7 @@ export const WHATSAPP_MESSAGES = {
 } as const;
 
 export const ZONES = [
-  { name: "Chamiza — base", highlighted: true },
-  { name: "Frutillar" },
+  { name: "Frutillar", highlighted: true },
   { name: "Llanquihue" },
   { name: "Puerto Varas" },
   { name: "Puerto Montt" },
@@ -24,7 +23,7 @@ export const ZONES = [
   { name: "La Arena" },
   { name: "Caleta Puelche" },
   { name: "Contao" },
-  { name: "Hornopirén" },
+  { name: "Hornopirén", highlighted: true },
 ] as const;
 
 export const MACRO_CATEGORIES = [

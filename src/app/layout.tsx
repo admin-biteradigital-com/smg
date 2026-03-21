@@ -64,8 +64,8 @@ const jsonLd = {
   "telephone": "+56985144771",
   "address": {
     "@type": "PostalAddress",
-    "addressLocality": "Puerto Montt (Chamiza)",
-    "addressRegion": "Región de Los Lagos",
+    "addressLocality": "Región de Los Lagos",
+    "addressRegion": "Los Lagos",
     "addressCountry": "CL"
   },
   "areaServed": [

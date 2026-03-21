@@ -12,7 +12,7 @@ const REASONS = [
   },
   {
     icon: Zap,
-    title: "Rrutas semanales",
+    title: "Rutas semanales",
     desc: "Tenemos una ruta establecida que repetimos todas las semanas, visitando cada localidad a fondo en un día específico.",
   },
   {

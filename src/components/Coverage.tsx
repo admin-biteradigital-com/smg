@@ -9,8 +9,8 @@ export default function Coverage() {
   return (
     <section className="relative py-28 overflow-hidden bg-[var(--navy-deep)]">
       {/* ── Panoramic background ── */}
-      <div className="absolute inset-0 z-0 bg-[url('/assets/coverage_carretera.png')] bg-cover bg-fixed bg-center bg-no-repeat opacity-40 mix-blend-luminosity" />
-      <div className="absolute inset-0 bg-gradient-to-r from-[var(--navy-deep)] via-[var(--navy-deep)]/90 to-transparent z-0" />
+      <div className="absolute inset-0 z-0 bg-[url('/assets/coverage_carretera.png')] bg-cover bg-center bg-no-repeat opacity-40 mix-blend-luminosity" />
+      <div className="absolute inset-0 bg-gradient-to-t from-[var(--navy-deep)] via-transparent to-[var(--navy-deep)] z-0" />
       
       <div className="absolute top-0 right-[-10%] w-[400px] h-[400px] bg-[var(--orange)] opacity-[0.08] rounded-full blur-[100px] z-0" />
 

@@ -36,9 +36,13 @@ const item = {
 
 export default function Pillars() {
   return (
-    <section className="relative py-28 overflow-hidden">
+    <section className="relative py-28 overflow-hidden bg-[var(--navy-deep)]">
+      {/* ── Panoramic background ── */}
+      <div className="absolute inset-0 z-0 bg-[url('/assets/pillars_rio.png')] bg-cover bg-bottom bg-no-repeat opacity-[0.15] mix-blend-screen" />
+      <div className="absolute inset-0 bg-gradient-to-b from-[var(--navy-deep)] via-transparent to-[var(--navy-deep)] z-0" />
+
       {/* Background accent */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-[var(--orange)] opacity-[0.03] rounded-full blur-[120px]" />
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-[var(--orange)] opacity-[0.03] rounded-full blur-[120px] pointer-events-none z-0" />
 
       <div className="relative z-10 max-w-[1200px] mx-auto px-6">
         <motion.div
