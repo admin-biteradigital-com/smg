@@ -24,8 +24,12 @@ const REASONS = [
 
 export default function WhyUs() {
   return (
-    <section className="relative py-28 overflow-hidden">
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] bg-[var(--orange)] opacity-[0.02] rounded-full blur-[120px]" />
+    <section className="relative py-28 overflow-hidden bg-[var(--navy-deep)]">
+      {/* ── Panoramic background ── */}
+      <div className="absolute inset-0 z-0 bg-[url('/assets/frutillar_view.png')] bg-cover bg-bottom bg-no-repeat opacity-20 mix-blend-overlay" />
+      <div className="absolute inset-0 bg-gradient-to-b from-[var(--navy-deep)] via-transparent to-[var(--navy-deep)] z-0" />
+
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] bg-[var(--orange)] opacity-[0.05] rounded-full blur-[120px] pointer-events-none z-0" />
 
       <div className="relative z-10 max-w-[1200px] mx-auto px-6">
         <motion.div

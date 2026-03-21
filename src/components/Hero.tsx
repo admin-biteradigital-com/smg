@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { motion } from "framer-motion";
 import { ArrowRight } from "lucide-react";
 import { track } from "@vercel/analytics";
@@ -10,24 +9,18 @@ import { whatsappLink, WHATSAPP_MESSAGES, STATS } from "@/lib/constants";
 export default function Hero() {
   return (
     <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
-      {/* ── Mesh gradient background ── */}
-      <div className="absolute inset-0 z-0">
-        <div className="absolute inset-0 bg-gradient-to-br from-[var(--navy-deep)] via-[var(--navy-mid)] to-[var(--navy-deep)]" />
-        <div
-          className="absolute top-[-30%] right-[-20%] w-[80vw] h-[80vw] rounded-full opacity-[0.07]"
-          style={{ background: "radial-gradient(circle, var(--orange) 0%, transparent 70%)" }}
-        />
-        <div
-          className="absolute bottom-[-20%] left-[-10%] w-[60vw] h-[60vw] rounded-full opacity-[0.05]"
-          style={{ background: "radial-gradient(circle, #4A90D9 0%, transparent 70%)" }}
-        />
+      {/* ── Panoramic background ── */}
+      <div className="absolute inset-0 z-0 bg-[url('/assets/hero_llanquihue.png')] bg-cover bg-center bg-no-repeat">
+        {/* Dark overlay to ensure text readability */}
+        <div className="absolute inset-0 bg-gradient-to-t from-[var(--navy-deep)] via-[var(--navy-deep)]/80 to-[var(--navy-deep)]/30 mix-blend-multiply" />
+        <div className="absolute inset-0 bg-black/30" />
       </div>
 
       {/* ── Content ── */}
       <div className="relative z-10 max-w-[1200px] mx-auto px-6 pt-28 pb-20 grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
 
-        {/* Left: Copy */}
-        <div className="space-y-8">
+        {/* Content Centered now since there is no right-side image */}
+        <div className="space-y-8 max-w-2xl">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
@@ -36,12 +29,11 @@ export default function Hero() {
             <span className="inline-block text-[0.72rem] font-bold tracking-[0.2em] uppercase text-[var(--orange)] mb-4">
               Distribuidora · Región de Los Lagos
             </span>
-            <h1 className="text-[clamp(2.4rem,5vw,4rem)] leading-[1.08] font-bold tracking-tight">
-              Golosinas que{" "}
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-[var(--orange)] to-[#FFB366]">
-                llegan
+            <h1 className="text-[clamp(2.4rem,5vw,4.5rem)] leading-[1.08] font-bold tracking-tight text-white drop-shadow-lg">
+              Conectando tu negocio con{" "}
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-[var(--orange)] to-[#FFB366] drop-shadow-sm">
+                las mejores marcas
               </span>
-              <br />a tu negocio
             </h1>
           </motion.div>
 
@@ -49,10 +41,10 @@ export default function Hero() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2, duration: 0.7 }}
-            className="text-[1.05rem] text-[var(--muted)] leading-relaxed max-w-[480px]"
+            className="text-[1.1rem] text-[var(--muted)]/90 leading-relaxed max-w-[520px] drop-shadow"
           >
-            Más de <strong className="text-white">100 productos</strong> de las marcas más buscadas.
-            Autoventa puerta a puerta desde Frutillar hasta Hornopirén, con facturación electrónica SII.
+            Más de <strong className="text-white">100 productos</strong> de alta rotación.
+            Llevamos el abastecimiento mayorista a tu puerta, desde el majestuoso <strong className="text-white">Bajo Frutillar</strong> hasta los bordes de <strong className="text-white">Hornopirén</strong>.
           </motion.p>
 
           <motion.div
@@ -99,36 +91,6 @@ export default function Hero() {
             ))}
           </motion.div>
         </div>
-
-        {/* Right: Profile visual */}
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.3, duration: 0.9, ease: [0.22, 1, 0.36, 1] as const }}
-          className="relative flex items-center justify-center"
-        >
-          <div className="relative w-[320px] h-[320px] lg:w-[400px] lg:h-[400px]">
-            {/* Glow ring */}
-            <div
-              className="absolute inset-[-8%] rounded-full opacity-30"
-              style={{
-                background: "conic-gradient(from 0deg, var(--orange), transparent 30%, transparent 70%, var(--orange))",
-                animation: "pulse-ring 3s ease-in-out infinite",
-              }}
-            />
-            {/* Glass circle */}
-            <div className="absolute inset-0 rounded-full glass" />
-            {/* Profile image */}
-            <Image
-              src="/assets/perfil.webp"
-              alt="SMG Distribuciones — Perfil"
-              fill
-              className="object-cover rounded-full p-3"
-              sizes="(max-width: 1024px) 320px, 400px"
-              priority
-            />
-          </div>
-        </motion.div>
       </div>
     </section>
   );

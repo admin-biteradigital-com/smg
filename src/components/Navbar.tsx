@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Image from "next/image";
+import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 
 export default function Navbar() {
@@ -25,14 +25,12 @@ export default function Navbar() {
       }`}
     >
       <div className="max-w-[1200px] mx-auto px-6 flex items-center justify-between h-[72px]">
-        <Image
-          src="/assets/portada.webp"
-          alt="SMG Distribuciones"
-          width={130}
-          height={38}
-          className="h-[38px] w-auto brightness-0 invert opacity-90 hover:opacity-100 transition-opacity"
-          priority
-        />
+        <Link href="/" className="flex items-center gap-2 group">
+          <div className="flex flex-col">
+            <span className="text-2xl font-black tracking-tighter text-white group-hover:text-[var(--orange)] transition-colors leading-none">SMG</span>
+            <span className="text-[0.6rem] uppercase tracking-[0.2em] text-[var(--muted)] group-hover:text-white transition-colors">Distribuciones</span>
+          </div>
+        </Link>
 
         <div className="flex items-center gap-6">
           <AnimatePresence>

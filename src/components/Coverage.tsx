@@ -7,8 +7,12 @@ import { ZONES, whatsappLink, WHATSAPP_MESSAGES } from "@/lib/constants";
 
 export default function Coverage() {
   return (
-    <section className="relative py-28 overflow-hidden">
-      <div className="absolute top-0 right-[-10%] w-[400px] h-[400px] bg-[var(--orange)] opacity-[0.03] rounded-full blur-[100px]" />
+    <section className="relative py-28 overflow-hidden bg-[var(--navy-deep)]">
+      {/* ── Panoramic background ── */}
+      <div className="absolute inset-0 z-0 bg-[url('/assets/coverage_carretera.png')] bg-cover bg-fixed bg-center bg-no-repeat opacity-40 mix-blend-luminosity" />
+      <div className="absolute inset-0 bg-gradient-to-r from-[var(--navy-deep)] via-[var(--navy-deep)]/90 to-transparent z-0" />
+      
+      <div className="absolute top-0 right-[-10%] w-[400px] h-[400px] bg-[var(--orange)] opacity-[0.08] rounded-full blur-[100px] z-0" />
 
       <div className="relative z-10 max-w-[1200px] mx-auto px-6">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
@@ -22,15 +26,15 @@ export default function Coverage() {
             <span className="text-[0.72rem] font-bold tracking-[0.2em] uppercase text-[var(--orange)] mb-4 block">
               Cobertura
             </span>
-            <h2 className="text-[clamp(1.8rem,3.5vw,2.6rem)] font-bold tracking-tight mb-5">
-              Desde la base hasta{" "}
+            <h2 className="text-[clamp(1.8rem,3.5vw,2.6rem)] font-bold tracking-tight mb-5 drop-shadow-md">
+              Desde Frutillar hasta{" "}
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-[var(--orange)] to-[#FFB366]">
                 Hornopirén
               </span>
             </h2>
-            <p className="text-[var(--muted)] text-[0.95rem] leading-relaxed mb-8 max-w-[440px]">
-              Nuestra flota recorre la <strong className="text-white">Carretera Austral</strong> diariamente,
-              abasteciendo negocios a lo largo de 11 localidades de la Región de Los Lagos.
+            <p className="text-[var(--muted)] text-[0.95rem] leading-relaxed mb-8 max-w-[440px] drop-shadow">
+              Nuestra gran flota recorre la majestuosa <strong className="text-white">Carretera Austral</strong> diariamente,
+              abasteciendo negocios y conectando 11 localidades clave de la Región de Los Lagos sin interrupciones.
             </p>
 
             <a
