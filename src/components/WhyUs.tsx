@@ -1,14 +1,14 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { ShieldCheck, Zap, BarChart3 } from "lucide-react";
+import { Package, Zap, BarChart3 } from "lucide-react";
 import { BRANDS } from "@/lib/constants";
 
 const REASONS = [
   {
-    icon: ShieldCheck,
-    title: "Confianza probada",
-    desc: "Representamos marcas líderes de la región únicamente. Cada producto pasa por nuestro estricto control de calidad.",
+    icon: Package,
+    title: "Variedad garantizada",
+    desc: "Más de 100 SKUs: chocolates, snacks, chicles, gomitas, café y más. Todo lo que tu negocio necesita en un solo proveedor.",
   },
   {
     icon: Zap,
@@ -26,8 +26,8 @@ export default function WhyUs() {
   return (
     <section className="relative py-28 bg-[var(--navy-mid)] overflow-hidden">
       {/* ── Background ── */}
-      <div className="absolute inset-0 z-0 bg-[url('/assets/frutillar_view.png')] bg-cover bg-bottom bg-no-repeat opacity-[0.35]" />
-      <div className="absolute inset-0 bg-[var(--navy-mid)]/80 z-0" />
+      <div className="absolute inset-0 z-0 bg-[url('/assets/frutillar_view.png')] bg-cover bg-bottom bg-no-repeat opacity-[0.55]" />
+      <div className="absolute inset-0 bg-[var(--navy-mid)]/60 z-0" />
       <div className="absolute inset-0 bg-gradient-to-b from-[var(--navy-deep)] via-transparent to-[var(--navy-deep)] z-0" />
 
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] bg-[var(--orange)] opacity-[0.05] rounded-full blur-[120px] pointer-events-none z-0" />

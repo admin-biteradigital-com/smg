@@ -68,8 +68,8 @@ export default function OnboardingForm() {
   return (
     <section className="relative py-28 overflow-hidden bg-[var(--navy-deep)]" id="alta-cliente">
       {/* ── Panoramic background ── */}
-      <div className="absolute inset-0 z-0 bg-[url('/assets/onboarding_oceano.png')] bg-cover bg-top bg-no-repeat opacity-[0.40]" />
-      <div className="absolute inset-0 bg-[var(--navy-deep)]/70 z-0" />
+      <div className="absolute inset-0 z-0 bg-[url('/assets/onboarding_oceano.png')] bg-cover bg-top bg-no-repeat opacity-[0.60]" />
+      <div className="absolute inset-0 bg-[var(--navy-deep)]/50 z-0" />
       <div className="absolute inset-0 bg-gradient-to-b from-[var(--navy-deep)] via-transparent to-[var(--navy-deep)] z-0" />
 
       <div className="absolute top-1/2 left-0 w-[500px] h-[500px] bg-[var(--orange)] opacity-[0.04] rounded-full blur-[120px] -translate-y-1/2 z-0 pointer-events-none" />
