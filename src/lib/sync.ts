@@ -20,9 +20,13 @@ import type {
 
 // ─── State ────────────────────────────────────────────────────────────────────
 
-type SyncListener = (status: SyncStatus, pendingCount: number) => void;
+export type SyncListener = (status: SyncStatus, pendingCount: number) => void;
 
-let _currentStatus: SyncStatus = navigator.onLine ? 'online' : 'offline';
+function isOnline(): boolean {
+  return typeof navigator !== 'undefined' ? Boolean(navigator.onLine) : true;
+}
+
+let _currentStatus: SyncStatus = isOnline() ? 'online' : 'offline';
 let _listeners: SyncListener[] = [];
 let _syncInProgress = false;
 
@@ -79,13 +83,15 @@ export function initConnectivityListeners(): () => void {
 
   // Intentar sincronizar en foreground si ya hay conexión al cargar la app
   // (cubre el caso iOS — no hay Background Sync)
-  if (navigator.onLine) {
+  if (isOnline()) {
     runSync().catch(console.error);
   }
 
   return () => {
-    window.removeEventListener('online', handleOnline);
-    window.removeEventListener('offline', handleOffline);
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    }
   };
 }
 
@@ -105,7 +111,7 @@ export async function runSync(): Promise<SyncResult> {
     return { success: false, synced: 0, failed: 0, conflicts: 0, errors: [] };
   }
 
-  if (!navigator.onLine) {
+  if (!isOnline()) {
     const pendingCount = await db.offline_queue.count();
     await broadcastStatus(pendingCount > 0 ? 'pending' : 'offline');
     return { success: false, synced: 0, failed: 0, conflicts: 0, errors: [] };
@@ -463,9 +469,9 @@ export async function pullMasterData(): Promise<void> {
  * todos los datos maestros en una sola respuesta.
  */
 export async function syncCatalog(force = false): Promise<void> {
-  if (!navigator.onLine) return;
+  if (!isOnline()) return;
 
-  const lastSync = localStorage.getItem('siglo_last_catalog_sync');
+  const lastSync = typeof localStorage !== 'undefined' ? localStorage.getItem('siglo_last_catalog_sync') : null;
   const now = Date.now();
   // Evitar descargas si fue hace menos de 5 minutos (300k ms), salvo force
   if (!force && lastSync && now - parseInt(lastSync, 10) < 300000) {
