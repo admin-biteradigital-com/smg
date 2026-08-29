@@ -1,65 +1,56 @@
-import { useEffect, useRef } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
+import { useEffect, useRef, lazy, Suspense } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation, Outlet } from 'react-router-dom';
+import { Loader2 } from 'lucide-react';
 import { initConnectivityListeners } from '@/lib/sync';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { JornadaProvider, useJornada } from '@/contexts/JornadaContext';
-import { PedidoActivoProvider } from '@/store/pedidoActivo';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 
-// ── Auth Pages ────────────────────────────────────────────────────────────────
-import LoginPage from '@/pages/auth/Login';
-import AuthVerifyPage from '@/pages/auth/AuthVerify';
-import CheckoutPage from '@/pages/public/Checkout';
-
-// ── App Shell ─────────────────────────────────────────────────────────────────
-import AppShell from '@/pages/app/AppShell';
-// @deprecated - DashboardPage reemplazado por ModoSelectorPage (ADR-012)
-// @deprecated - JornadaPage reemplazado por Escenas en src/pages/jornada/ (ADR-012)
-import ClientesPage from '@/pages/app/Clientes';
-import CatalogoPage from '@/pages/app/Catalogo';
-import SyncStatusPage from '@/pages/app/SyncStatus';
-
-// ── ADR-014: Modo Gestión ───────────────────────────────────────────────────
-import GestionHomePage from '@/pages/gestion/GestionHomePage';
-import EmpresaPage from '@/pages/gestion/EmpresaPage';
-import CuentasCorrientesPage from '@/pages/gestion/cuentas/CuentasCorrientesPage';
-import ProductosListPage from '@/pages/gestion/productos/ProductosListPage';
-import ProductoFormPage from '@/pages/gestion/productos/ProductoFormPage';
-import EmpleadosListPage from '@/pages/gestion/empleados/EmpleadosListPage';
-import EmpleadoFormPage from '@/pages/gestion/empleados/EmpleadoFormPage';
-import VehiculosListPage from '@/pages/gestion/vehiculos/VehiculosListPage';
-import VehiculoFormPage from '@/pages/gestion/vehiculos/VehiculoFormPage';
-import RutasListPage from '@/pages/gestion/rutas/RutasListPage';
-import RutaFormPage from '@/pages/gestion/rutas/RutaFormPage';
-
-// ── ADR-012: Páginas y Layout de Modo Jornada ────────────────────────────────
-import { JornadaProviderRoute } from '@/components/layout/JornadaProviderRoute';
-import ModoSelectorPage from '@/pages/ModoSelector';
-import EscenaAbrirJornadaPage from '@/pages/jornada/EscenaAbrirJornada';
-import EscenaCargarVehiculoPage from '@/pages/jornada/EscenaCargarVehiculo';
-import EscenaRutaClientesPage from '@/pages/jornada/EscenaRutaClientes';
-import EscenaVentaPage from '@/pages/jornada/EscenaVenta';
-import EscenaCobroPage from '@/pages/jornada/EscenaCobro';
-import EscenaCobroSinVentaPage from '@/pages/jornada/EscenaCobroSinVenta';
-import EscenaCierrePage from '@/pages/jornada/EscenaCierre';
-
-// ── Flujo Pedido ──────────────────────────────────────────────────────────────
-import NuevoPedidoPage from '@/pages/app/pedido/NuevoPedido';
-import SelectorClientePage from '@/pages/app/pedido/SelectorCliente';
-import SelectorItemsPage from '@/pages/app/pedido/SelectorItems';
-import ConfirmarPedidoPage from '@/pages/app/pedido/ConfirmarPedido';
-
-// ─── Wrapper que inyecta el provider del pedido activo (necesita user.userId) ─────
-
-function AppWithPedidoProvider({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth();
-  if (!user) return <>{children}</>;
+// ── Componente de Fallback Simple para Suspense ──────────────────────────────
+function LoadingFallback() {
   return (
-    <PedidoActivoProvider userId={user.userId}>
-      {children}
-    </PedidoActivoProvider>
+    <div className="min-h-dvh bg-zinc-950 flex flex-col items-center justify-center gap-3 text-zinc-400">
+      <Loader2 className="w-8 h-8 animate-spin text-brand-400" />
+      <p className="text-xs text-zinc-500 font-medium">Cargando módulo...</p>
+    </div>
   );
 }
+
+// ── Auth Pages (Eager) ────────────────────────────────────────────────────────
+import LoginPage from '@/pages/auth/Login';
+import AuthVerifyPage from '@/pages/auth/AuthVerify';
+import ModoSelectorPage from '@/pages/ModoSelector';
+
+// ── App Shell / Catálogo (Eager) ──────────────────────────────────────────────
+import AppShell from '@/pages/app/AppShell';
+import CatalogoPage from '@/pages/app/Catalogo';
+
+// ── Grupo Lazy: Checkout ──────────────────────────────────────────────────────
+const CheckoutPage = lazy(() => import('@/pages/public/Checkout'));
+
+// ── Grupo Lazy: Modo Gestión (ADR-014) ────────────────────────────────────────
+const GestionHomePage = lazy(() => import('@/pages/gestion/GestionHomePage'));
+const EmpresaPage = lazy(() => import('@/pages/gestion/EmpresaPage'));
+const CuentasCorrientesPage = lazy(() => import('@/pages/gestion/cuentas/CuentasCorrientesPage'));
+const ProductosListPage = lazy(() => import('@/pages/gestion/productos/ProductosListPage'));
+const ProductoFormPage = lazy(() => import('@/pages/gestion/productos/ProductoFormPage'));
+const EmpleadosListPage = lazy(() => import('@/pages/gestion/empleados/EmpleadosListPage'));
+const EmpleadoFormPage = lazy(() => import('@/pages/gestion/empleados/EmpleadoFormPage'));
+const VehiculosListPage = lazy(() => import('@/pages/gestion/vehiculos/VehiculosListPage'));
+const VehiculoFormPage = lazy(() => import('@/pages/gestion/vehiculos/VehiculoFormPage'));
+const RutasListPage = lazy(() => import('@/pages/gestion/rutas/RutasListPage'));
+const RutaFormPage = lazy(() => import('@/pages/gestion/rutas/RutaFormPage'));
+
+// ── Grupo Lazy: Modo Jornada (ADR-012 — Consolidado en un único chunk) ───────
+const jornadaModulePromise = import('@/pages/jornada');
+const JornadaProviderRoute = lazy(() => jornadaModulePromise.then((m) => ({ default: m.JornadaProviderRoute })));
+const EscenaAbrirJornadaPage = lazy(() => jornadaModulePromise.then((m) => ({ default: m.EscenaAbrirJornadaPage })));
+const EscenaCargarVehiculoPage = lazy(() => jornadaModulePromise.then((m) => ({ default: m.EscenaCargarVehiculoPage })));
+const EscenaRutaClientesPage = lazy(() => jornadaModulePromise.then((m) => ({ default: m.EscenaRutaClientesPage })));
+const EscenaVentaPage = lazy(() => jornadaModulePromise.then((m) => ({ default: m.EscenaVentaPage })));
+const EscenaCobroPage = lazy(() => jornadaModulePromise.then((m) => ({ default: m.EscenaCobroPage })));
+const EscenaCobroSinVentaPage = lazy(() => jornadaModulePromise.then((m) => ({ default: m.EscenaCobroSinVentaPage })));
+const EscenaCierrePage = lazy(() => jornadaModulePromise.then((m) => ({ default: m.EscenaCierrePage })));
 
 // ─── SyncBootstrap ────────────────────────────────────────────────────────────
 // Espera a que la sesión esté hidratada (isLoading=false) antes de arrancar
@@ -129,7 +120,9 @@ export default function App() {
             path="/checkout"
             element={
               <ProtectedRoute>
-                <CheckoutPage />
+                <Suspense fallback={<LoadingFallback />}>
+                  <CheckoutPage />
+                </Suspense>
               </ProtectedRoute>
             }
           />
@@ -149,139 +142,46 @@ export default function App() {
 
           {/* ── ADR-014: Modo Gestión ── */}
           <Route
-            path="/gestion"
             element={
               <ProtectedRoute allowedRoles={['admin']}>
-                <GestionHomePage />
+                <Suspense fallback={<LoadingFallback />}>
+                  <Outlet />
+                </Suspense>
               </ProtectedRoute>
             }
-          />
-          <Route
-            path="/gestion/empresa"
-            element={
-              <ProtectedRoute allowedRoles={['admin']}>
-                <EmpresaPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/gestion/cuentas"
-            element={
-              <ProtectedRoute allowedRoles={['admin']}>
-                <CuentasCorrientesPage />
-              </ProtectedRoute>
-            }
-          />
+          >
+            <Route path="/gestion" element={<GestionHomePage />} />
+            <Route path="/gestion/empresa" element={<EmpresaPage />} />
+            <Route path="/gestion/cuentas" element={<CuentasCorrientesPage />} />
 
-          {/* Productos */}
-          <Route
-            path="/gestion/productos"
-            element={
-              <ProtectedRoute allowedRoles={['admin']}>
-                <ProductosListPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/gestion/productos/nuevo"
-            element={
-              <ProtectedRoute allowedRoles={['admin']}>
-                <ProductoFormPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/gestion/productos/:id/editar"
-            element={
-              <ProtectedRoute allowedRoles={['admin']}>
-                <ProductoFormPage />
-              </ProtectedRoute>
-            }
-          />
+            {/* Productos */}
+            <Route path="/gestion/productos" element={<ProductosListPage />} />
+            <Route path="/gestion/productos/nuevo" element={<ProductoFormPage />} />
+            <Route path="/gestion/productos/:id/editar" element={<ProductoFormPage />} />
 
-          {/* Empleados */}
-          <Route
-            path="/gestion/empleados"
-            element={
-              <ProtectedRoute allowedRoles={['admin']}>
-                <EmpleadosListPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/gestion/empleados/nuevo"
-            element={
-              <ProtectedRoute allowedRoles={['admin']}>
-                <EmpleadoFormPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/gestion/empleados/:id/editar"
-            element={
-              <ProtectedRoute allowedRoles={['admin']}>
-                <EmpleadoFormPage />
-              </ProtectedRoute>
-            }
-          />
+            {/* Empleados */}
+            <Route path="/gestion/empleados" element={<EmpleadosListPage />} />
+            <Route path="/gestion/empleados/nuevo" element={<EmpleadoFormPage />} />
+            <Route path="/gestion/empleados/:id/editar" element={<EmpleadoFormPage />} />
 
-          {/* Vehículos */}
-          <Route
-            path="/gestion/vehiculos"
-            element={
-              <ProtectedRoute allowedRoles={['admin']}>
-                <VehiculosListPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/gestion/vehiculos/nuevo"
-            element={
-              <ProtectedRoute allowedRoles={['admin']}>
-                <VehiculoFormPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/gestion/vehiculos/:id/editar"
-            element={
-              <ProtectedRoute allowedRoles={['admin']}>
-                <VehiculoFormPage />
-              </ProtectedRoute>
-            }
-          />
+            {/* Vehículos */}
+            <Route path="/gestion/vehiculos" element={<VehiculosListPage />} />
+            <Route path="/gestion/vehiculos/nuevo" element={<VehiculoFormPage />} />
+            <Route path="/gestion/vehiculos/:id/editar" element={<VehiculoFormPage />} />
 
-          {/* Rutas */}
-          <Route
-            path="/gestion/rutas"
-            element={
-              <ProtectedRoute allowedRoles={['admin']}>
-                <RutasListPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/gestion/rutas/nuevo"
-            element={
-              <ProtectedRoute allowedRoles={['admin']}>
-                <RutaFormPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/gestion/rutas/:id/editar"
-            element={
-              <ProtectedRoute allowedRoles={['admin']}>
-                <RutaFormPage />
-              </ProtectedRoute>
-            }
-          />
+            {/* Rutas */}
+            <Route path="/gestion/rutas" element={<RutasListPage />} />
+            <Route path="/gestion/rutas/nuevo" element={<RutaFormPage />} />
+            <Route path="/gestion/rutas/:id/editar" element={<RutaFormPage />} />
+          </Route>
 
           {/* ── ADR-012: Modo Jornada (flujo secuencial con JornadaProvider compartido) ── */}
           <Route
             element={
               <ProtectedRoute allowedRoles={['vendedor', 'chofer', 'admin']}>
-                <JornadaProviderRoute />
+                <Suspense fallback={<LoadingFallback />}>
+                  <JornadaProviderRoute />
+                </Suspense>
               </ProtectedRoute>
             }
           >
@@ -298,26 +198,12 @@ export default function App() {
           <Route
             element={
               <ProtectedRoute>
-                <AppWithPedidoProvider>
-                  <AppShell />
-                </AppWithPedidoProvider>
+                <AppShell />
               </ProtectedRoute>
             }
           >
-            {/* Clientes */}
-            <Route path="clientes" element={<ClientesPage />} />
-
             {/* Catálogo */}
             <Route path="catalogo" element={<CatalogoPage />} />
-
-            {/* Sincronización */}
-            <Route path="sync" element={<SyncStatusPage />} />
-
-            {/* ── Flujo Nuevo Pedido ──────────────────────────────── */}
-            <Route path="pedidos/nuevo" element={<NuevoPedidoPage />} />
-            <Route path="pedidos/nuevo/cliente" element={<SelectorClientePage />} />
-            <Route path="pedidos/nuevo/items" element={<SelectorItemsPage />} />
-            <Route path="pedidos/nuevo/confirmar" element={<ConfirmarPedidoPage />} />
           </Route>
 
           {/* Fallback */}

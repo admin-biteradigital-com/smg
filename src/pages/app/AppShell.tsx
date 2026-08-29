@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Outlet, NavLink } from 'react-router-dom';
-import { Home, Users, Package, RefreshCw, LogOut } from 'lucide-react';
+import { Home, Package, LogOut } from 'lucide-react';
 import { SyncIndicator } from '@/components/offline/SyncIndicator';
 import { onSyncStatusChange, getCurrentSyncStatus } from '@/lib/sync';
 import { useAuth } from '@/contexts/AuthContext';
@@ -54,11 +54,11 @@ export default function AppShell() {
 
       {/* Bottom Nav Bar Fija (Mobile-First) */}
       <nav className="fixed bottom-0 left-0 right-0 z-40 bg-zinc-900/90 backdrop-blur-md border-t border-zinc-850 px-4 pt-2 pb-[env(safe-area-inset-bottom)] shadow-2xl">
-        <div className="max-w-lg mx-auto flex items-center justify-between">
+        <div className="max-w-lg mx-auto flex items-center justify-around">
           <NavLink
             to="/"
             className={({ isActive }) =>
-              `flex flex-col items-center justify-center py-1.5 w-16 text-[10px] font-medium transition-all ${
+              `flex flex-col items-center justify-center py-1.5 w-20 text-[10px] font-medium transition-all ${
                 isActive ? 'text-brand-400 scale-105' : 'text-zinc-500 hover:text-zinc-350'
               }`
             }
@@ -68,44 +68,15 @@ export default function AppShell() {
           </NavLink>
 
           <NavLink
-            to="/clientes"
-            className={({ isActive }) =>
-              `flex flex-col items-center justify-center py-1.5 w-16 text-[10px] font-medium transition-all ${
-                isActive ? 'text-brand-400 scale-105' : 'text-zinc-500 hover:text-zinc-350'
-              }`
-            }
-          >
-            <Users className="w-5 h-5 mb-0.5" />
-            <span>Clientes</span>
-          </NavLink>
-
-          <NavLink
             to="/catalogo"
             className={({ isActive }) =>
-              `flex flex-col items-center justify-center py-1.5 w-16 text-[10px] font-medium transition-all ${
+              `flex flex-col items-center justify-center py-1.5 w-20 text-[10px] font-medium transition-all ${
                 isActive ? 'text-brand-400 scale-105' : 'text-zinc-500 hover:text-zinc-350'
               }`
             }
           >
             <Package className="w-5 h-5 mb-0.5" />
             <span>Catálogo</span>
-          </NavLink>
-
-          <NavLink
-            to="/sync"
-            className={({ isActive }) =>
-              `flex flex-col items-center justify-center py-1.5 w-16 text-[10px] font-medium transition-all relative ${
-                isActive ? 'text-brand-400 scale-105' : 'text-zinc-500 hover:text-zinc-350'
-              }`
-            }
-          >
-            <RefreshCw className={`w-5 h-5 mb-0.5 ${syncStatus === 'syncing' ? 'animate-spin' : ''}`} />
-            <span>Sincronizar</span>
-            {pendingCount > 0 && (
-              <span className="absolute top-1 right-2.5 bg-brand-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full min-w-[16px] text-center border border-zinc-900">
-                {pendingCount}
-              </span>
-            )}
           </NavLink>
         </div>
       </nav>
