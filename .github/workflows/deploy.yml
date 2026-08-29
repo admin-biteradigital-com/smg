@@ -91,7 +91,7 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          projectName: smg-biteradigital
+          projectName: smg-staging
           directory: dist
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
           branch: develop
@@ -117,7 +117,7 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          projectName: smg-biteradigital
+          projectName: smg-staging
           directory: dist
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
           branch: main
