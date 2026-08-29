@@ -1,0 +1,145 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Base ──────────────────────────────────────────────────── */
+@layer base {
+  :root {
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-top:    env(safe-area-inset-top, 0px);
+  }
+
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    /* Prevent text size adjustment on orientation change (iOS) */
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-surface-900 text-white;
+    min-height: 100dvh;
+    overscroll-behavior: none;
+  }
+
+  /* Scrollbar dark mode */
+  ::-webkit-scrollbar          { @apply w-1.5; }
+  ::-webkit-scrollbar-track    { @apply bg-surface-850; }
+  ::-webkit-scrollbar-thumb    { @apply bg-brand-700 rounded-full; }
+  ::-webkit-scrollbar-thumb:hover { @apply bg-brand-600; }
+
+  /* Focus ring accesible */
+  :focus-visible {
+    @apply outline-none ring-2 ring-brand-400 ring-offset-2 ring-offset-surface-900;
+  }
+}
+
+/* ─── Components ─────────────────────────────────────────────── */
+@layer components {
+  /* Botones base */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2
+           font-semibold rounded-xl
+           transition-all duration-200 ease-out
+           disabled:opacity-50 disabled:cursor-not-allowed
+           active:scale-95
+           min-h-[44px] px-5 py-2.5 text-sm;
+  }
+
+  .btn-primary {
+    @apply btn bg-brand-600 text-white
+           hover:bg-brand-500
+           shadow-glow hover:shadow-none;
+  }
+
+  .btn-accent {
+    @apply btn bg-accent-500 text-white
+           hover:bg-accent-400;
+  }
+
+  .btn-ghost {
+    @apply btn bg-white/5 text-white/80
+           hover:bg-white/10 hover:text-white;
+  }
+
+  .btn-danger {
+    @apply btn bg-danger-600 text-white
+           hover:bg-danger-500;
+  }
+
+  /* Cards */
+  .card {
+    @apply bg-surface-800 rounded-2xl shadow-card
+           border border-white/5 p-4;
+  }
+
+  .card-glass {
+    @apply backdrop-blur-md bg-white/5
+           rounded-2xl border border-white/10
+           shadow-card p-4;
+  }
+
+  /* Inputs */
+  .input {
+    @apply w-full bg-surface-850 border border-white/10
+           rounded-xl px-4 py-3 text-sm text-white
+           placeholder-white/30
+           focus:outline-none focus:ring-2 focus:ring-brand-500
+           focus:border-transparent
+           transition-all duration-200
+           min-h-[44px];
+  }
+
+  .input-label {
+    @apply block text-xs font-semibold uppercase tracking-wider
+           text-white/50 mb-1.5;
+  }
+
+  /* Badge de estado de conexión */
+  .badge-online   { @apply inline-flex items-center gap-1.5 text-xs font-medium text-success-400; }
+  .badge-offline  { @apply inline-flex items-center gap-1.5 text-xs font-medium text-white/40; }
+  .badge-syncing  { @apply inline-flex items-center gap-1.5 text-xs font-medium text-brand-400; }
+  .badge-pending  { @apply inline-flex items-center gap-1.5 text-xs font-medium text-accent-400; }
+  .badge-conflict { @apply inline-flex items-center gap-1.5 text-xs font-medium text-danger-400; }
+
+  /* Bottom nav bar segura (iOS) */
+  .bottom-nav {
+    @apply fixed bottom-0 left-0 right-0
+           bg-surface-850/95 backdrop-blur-lg
+           border-t border-white/5
+           flex items-center justify-around
+           px-2 pt-2;
+    padding-bottom: calc(0.5rem + var(--safe-bottom));
+  }
+}
+
+/* ─── Utilities ──────────────────────────────────────────────── */
+@layer utilities {
+  /* Safe area helpers */
+  .pt-safe { padding-top: var(--safe-top); }
+  .pb-safe { padding-bottom: var(--safe-bottom); }
+
+  /* Divider */
+  .divider {
+    @apply border-t border-white/5 my-4;
+  }
+
+  /* Skeleton loader */
+  .skeleton {
+    @apply animate-pulse bg-white/10 rounded-lg;
+  }
+
+  /* Touch target mínimo WCAG 44x44 */
+  .touch-target {
+    @apply min-h-[44px] min-w-[44px];
+  }
+}

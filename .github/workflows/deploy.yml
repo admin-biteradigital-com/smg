@@ -1,0 +1,133 @@
+name: SMG Frontend CI/CD
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  # ── TEST ───────────────────────────────────────────────────────────────────
+  test:
+    name: Calidad
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Tests
+        run: npm run test
+
+      - name: Auditoría de dependencias
+        run: npm audit --audit-level=high
+        continue-on-error: true
+
+      - name: Verificar que no hay secrets hardcodeados
+        run: |
+          if grep -rE "(VITE_VAPID_PRIVATE|api_key|secret)" src/ --include="*.ts" --include="*.tsx" 2>/dev/null | grep -v ".test."; then
+            echo "❌ Posibles secrets en src/"
+            exit 1
+          fi
+
+  # ── BUILD ──────────────────────────────────────────────────────────────────
+  build:
+    name: Build
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Build de producción
+        run: npm run build
+        env:
+          VITE_SIGLO_API_URL: ${{ vars.VITE_SIGLO_API_URL }}
+          VITE_VAPID_PUBLIC_KEY: ${{ vars.VITE_VAPID_PUBLIC_KEY }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  # ── DEPLOY STAGING — push a develop ──────────────────────────────────────
+  deploy-staging:
+    name: Deploy Staging
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Deploy a Cloudflare Pages (staging)
+        uses: cloudflare/pages-action@v1
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          projectName: smg-biteradigital
+          directory: dist
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+          branch: develop
+
+  # ── DEPLOY PRODUCCIÓN — push a main ──────────────────────────────────────
+  deploy-production:
+    name: Deploy Producción
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: production   # Requiere aprobación manual
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Deploy a Cloudflare Pages (producción)
+        uses: cloudflare/pages-action@v1
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          projectName: smg-biteradigital
+          directory: dist
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+          branch: main
+
+# ── SECRETS Y VARS REQUERIDOS EN GITHUB ────────────────────────────────────
+# Secrets (Settings → Secrets → Actions):
+#   CLOUDFLARE_API_TOKEN   → API Token con permisos Cloudflare Pages
+#   CLOUDFLARE_ACCOUNT_ID  → Account ID de Cloudflare
+#
+# Variables (Settings → Variables → Actions):
+#   VITE_SIGLO_API_URL     → https://siglo.smg.biteradigital.com (prod)
+#                          → https://siglo-staging.smg.biteradigital.com (staging)
+#   VITE_VAPID_PUBLIC_KEY  → public key VAPID para push notifications

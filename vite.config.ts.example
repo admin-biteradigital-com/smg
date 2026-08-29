@@ -1,0 +1,66 @@
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import { VitePWA } from 'vite-plugin-pwa';
+
+export default defineConfig({
+  plugins: [
+    react(),
+    VitePWA({
+      registerType: 'autoUpdate',
+      includeAssets: ['icons/*.png'],
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,webp}'],
+        runtimeCaching: [
+          {
+            // Catálogo: stale-while-revalidate (5 min)
+            urlPattern: ({ url }) =>
+              url.pathname.startsWith('/api/v1/catalog') ||
+              url.pathname.startsWith('/api/v1/config'),
+            handler: 'StaleWhileRevalidate',
+            options: {
+              cacheName: 'api-public-cache',
+              expiration: { maxAgeSeconds: 300 },
+            },
+          },
+          {
+            // API protegida: network-first con fallback
+            urlPattern: ({ url }) => url.pathname.startsWith('/api/v1/'),
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'api-protected-cache',
+              networkTimeoutSeconds: 5,
+            },
+          },
+        ],
+      },
+      manifest: {
+        name: 'SMG Distribuidora',
+        short_name: 'SMG',
+        description: 'Sistema de gestión SMG',
+        theme_color: '#1A3C5E',
+        background_color: '#ffffff',
+        display: 'standalone',
+        orientation: 'portrait',
+        start_url: '/',
+        icons: [
+          { src: 'icons/192.png', sizes: '192x192', type: 'image/png' },
+          { src: 'icons/512.png', sizes: '512x512', type: 'image/png' },
+          {
+            src: 'icons/512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable',
+          },
+        ],
+      },
+    }),
+  ],
+  server: {
+    proxy: {
+      '/api': {
+        target: process.env.VITE_SIGLO_API_URL || 'http://localhost:8787',
+        changeOrigin: true,
+      },
+    },
+  },
+});
