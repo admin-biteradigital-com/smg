@@ -137,11 +137,6 @@ export default function EscenaVentaPage() {
     initStockLines();
   }, [jornada?.stockVehiculo]);
 
-  // Guard: si no hay jornada activa → redirigir a /jornada
-  if (!jornadaLoading && !jornada) {
-    return <Navigate to="/jornada" replace />;
-  }
-
   // Modificar cantidad en carrito
   const handleUpdateCantidad = (idProducto: number, idLote: number, nuevaCantidad: number) => {
     setCarrito((prev) =>
@@ -191,6 +186,11 @@ export default function EscenaVentaPage() {
   const totalUnidades = useMemo(() => {
     return lineasSeleccionadas.reduce((acc, l) => acc + l.cantidad, 0);
   }, [lineasSeleccionadas]);
+
+  // Guard: si no hay jornada activa → redirigir a /jornada
+  if (!jornadaLoading && !jornada) {
+    return <Navigate to="/jornada" replace />;
+  }
 
   // 3. Confirmar Venta
   const handleConfirmarVenta = async () => {

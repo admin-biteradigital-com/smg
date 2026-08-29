@@ -86,11 +86,6 @@ export default function EscenaRutaClientesPage() {
     loadSaldos();
   }, [clientes]);
 
-  // Si no hay jornada activa → redirigir a /jornada
-  if (!jornadaLoading && !jornada) {
-    return <Navigate to="/jornada" replace />;
-  }
-
   // Filtrado de clientes por texto en tiempo real
   const clientesFiltrados = useMemo(() => {
     const q = normalizar(busqueda.trim());
@@ -113,6 +108,11 @@ export default function EscenaRutaClientesPage() {
       return matchRut || matchRazon || matchFantasia || matchSucursal;
     });
   }, [clientes, busqueda, sucursalesMap]);
+
+  // Si no hay jornada activa → redirigir a /jornada
+  if (!jornadaLoading && !jornada) {
+    return <Navigate to="/jornada" replace />;
+  }
 
   // Manejador de selección de cliente (ADR-013: condicional según deuda)
   const handleSelectCliente = (cliente: EnrichedCliente) => {

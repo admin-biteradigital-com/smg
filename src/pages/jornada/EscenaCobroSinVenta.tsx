@@ -69,11 +69,6 @@ export default function EscenaCobroSinVentaPage() {
   const [errorCobro, setErrorCobro] = useState<string | null>(null);
   const [cobroExitosoMsg, setCobroExitosoMsg] = useState<string | null>(null);
 
-  // Redirigir si no hay jornada activa
-  if (!jornadaLoading && !jornada) {
-    return <Navigate to="/jornada" replace />;
-  }
-
   // 1. Cargar cliente y sucursal desde Dexie
   useEffect(() => {
     async function loadClienteInfo() {
@@ -118,6 +113,11 @@ export default function EscenaCobroSinVentaPage() {
   useEffect(() => {
     fetchVentasPendientes();
   }, [fetchVentasPendientes]);
+
+  // Redirigir si no hay jornada activa
+  if (!jornadaLoading && !jornada) {
+    return <Navigate to="/jornada" replace />;
+  }
 
   // Métodos de pago disponibles
   const metodos: Array<{ id: MetodoPagoCobro; label: string; icon: typeof Banknote }> = [
