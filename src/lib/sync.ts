@@ -219,6 +219,11 @@ async function flushOfflineQueue(): Promise<SyncResult> {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
 
+      // Si la operación rechazada era una apertura de jornada, revertir la fila optimista en Dexie
+      if (item.type === 'OPEN_JORNADA') {
+        await db.jornadas.delete(item.ulid);
+      }
+
       // Conflicto (409) — registrar pero no reintentar
       if (error instanceof Error && 'status' in error && (error as { status: number }).status === 409) {
         result.conflicts++;
@@ -283,10 +288,16 @@ async function sendBatchSync(operations: OfflineQueueItem[]): Promise<SyncResult
       result.synced++;
     } else if (r.status === 'conflict') {
       await markOperationFailed(item.id, r.error ?? 'Conflicto');
+      if (item.type === 'OPEN_JORNADA') {
+        await db.jornadas.delete(item.ulid);
+      }
       result.conflicts++;
       result.errors.push({ ulid: r.ulid, error: `CONFLICT: ${r.error}` });
     } else {
       await markOperationFailed(item.id, r.error ?? 'Error desconocido');
+      if (item.type === 'OPEN_JORNADA') {
+        await db.jornadas.delete(item.ulid);
+      }
       result.failed++;
       result.errors.push({ ulid: r.ulid, error: r.error ?? 'Error' });
     }

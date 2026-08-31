@@ -269,6 +269,7 @@ describe('ADR-015 Offline Jornada - ULID & Queue Types', () => {
     expect(queueItem.method).toBe('POST');
     expect(queueItem.payload.id).toBe('01JM7890ABCDEF1234567890');
     expect(queueItem.payload.idVehiculo).toBe(1);
+    expect(queueItem.payload.notasApertura).toBe('Inicio de ruta norte');
   });
 });
 

@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { fetchJornadaActiva } from '@/lib/api';
 import { ApiRequestError } from '@/lib/api';
 import { db } from '@/lib/db';
+import { onSyncStatusChange } from '@/lib/sync';
 import type { Jornada, StockVehiculoItem as StockVehiculoItemBackend } from '@/types';
 
 // ─── Tipos del contexto ──────────────────────────────────────────────────────
@@ -146,6 +147,25 @@ export function JornadaProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     refreshJornada();
+
+    const handleOnline = () => {
+      console.info('[JornadaContext] Conexión recuperada — refrescando estado de jornada...');
+      refreshJornada();
+    };
+
+    window.addEventListener('online', handleOnline);
+
+    const unsubscribeSync = onSyncStatusChange((status) => {
+      // Reconciliar estado cuando el sync termine de procesar la cola (éxito o conflicto)
+      if (status === 'online' || status === 'conflict') {
+        refreshJornada();
+      }
+    });
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      unsubscribeSync();
+    };
   }, [refreshJornada]);
 
   return (
