@@ -8,7 +8,7 @@
  */
 export function cleanRut(rut: string): string {
   if (typeof rut !== 'string') return '';
-  return rut.replace(/[\.\s]/g, '').toUpperCase().trim();
+  return rut.replace(/[.\s]/g, '').toUpperCase().trim();
 }
 
 /**
