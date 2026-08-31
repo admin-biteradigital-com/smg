@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { fetchJornadaActiva } from '@/lib/api';
 import { ApiRequestError } from '@/lib/api';
+import { db } from '@/lib/db';
 import type { Jornada, StockVehiculoItem as StockVehiculoItemBackend } from '@/types';
 
 // ─── Tipos del contexto ──────────────────────────────────────────────────────
@@ -20,7 +21,7 @@ export interface StockVehiculoItem {
 }
 
 export interface JornadaActiva {
-  id: number;
+  id: string;
   idVehiculo: number;
   vehiculoPatente: string;
   vehiculoDescripcion: string;
@@ -82,33 +83,62 @@ export function JornadaProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState<string | null>(null);
 
   const refreshJornada = useCallback(async () => {
-    if (!navigator.onLine) {
-      setLoading(false);
-      return;
-    }
-
     setLoading(true);
     setError(null);
 
-    try {
-      const res = await fetchJornadaActiva();
+    // 1. Si hay conexión, intentar consultar la verdad del servidor
+    if (navigator.onLine) {
+      try {
+        const res = await fetchJornadaActiva();
 
-      if (res.data && res.data.id) {
-        setJornada(mapJornadaToActiva(res.data));
+        if (res.data && res.data.id) {
+          // Persistir jornada activa en Dexie
+          await db.jornadas.put(res.data);
+          setJornada(mapJornadaToActiva(res.data));
+          setLoading(false);
+          return;
+        } else {
+          // Servidor indica sin jornada activa
+          setJornada(null);
+          setLoading(false);
+          return;
+        }
+      } catch (err: unknown) {
+        if (err instanceof ApiRequestError && err.status === 404) {
+          setJornada(null);
+          setLoading(false);
+          return;
+        }
+        console.warn('[JornadaContext] Error al consultar servidor, intentando Dexie:', err);
+      }
+    }
+
+    // 2. Si no hay red (o fallo de conexión), resolver desde Dexie local
+    try {
+      const localJornada = await db.jornadas.where('estado').equals('abierta').first();
+      if (localJornada) {
+        // Enriquecer datos de vehículo y ruta si faltan en el registro local
+        if (!localJornada.vehiculoPatente && localJornada.idVehiculo) {
+          const veh = await db.vehiculos.get(localJornada.idVehiculo);
+          if (veh) {
+            localJornada.vehiculoPatente = veh.patente;
+            localJornada.vehiculoDescripcion = [veh.marca, veh.modelo].filter(Boolean).join(' ') || undefined;
+          }
+        }
+        if (!localJornada.rutaNombre && localJornada.idRuta) {
+          const ruta = await db.rutas.get(localJornada.idRuta);
+          if (ruta) {
+            localJornada.rutaNombre = ruta.nombre;
+          }
+        }
+        setJornada(mapJornadaToActiva(localJornada));
       } else {
         setJornada(null);
       }
-    } catch (err: unknown) {
-      // 404 o sin jornada activa no es un error fatal, simplemente no hay jornada
-      if (err instanceof ApiRequestError && err.status === 404) {
-        setJornada(null);
-      } else {
-        const message =
-          err instanceof Error ? err.message : 'Error al obtener estado de la jornada';
-        console.warn('[JornadaContext] Error al consultar jornada activa:', err);
-        setError(message);
-        setJornada(null);
-      }
+    } catch (dbErr) {
+      console.error('[JornadaContext] Error al leer jornada de Dexie:', dbErr);
+      setError('Error al consultar almacenamiento local.');
+      setJornada(null);
     } finally {
       setLoading(false);
     }

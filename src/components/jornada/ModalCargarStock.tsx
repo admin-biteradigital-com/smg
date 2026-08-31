@@ -24,7 +24,7 @@ interface DepositoStockItem {
 
 interface ModalCargarStockProps {
   isOpen: boolean;
-  idJornada: number;
+  idJornada: string;
   onClose: () => void;
   onSuccess: (resumen: ResumenCargaStock) => void;
 }

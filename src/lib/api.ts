@@ -299,7 +299,7 @@ export async function abrirJornada(payload: AbrirJornadaPayload): Promise<ApiRes
  * Requiere conexión activa (no debe encolarse offline).
  */
 export async function cargarStockVehiculo(
-  idJornada: number,
+  idJornada: string,
   payload: CargarStockPayload,
 ): Promise<ApiResponse<ResumenCargaStock>> {
   return api.post<ApiResponse<ResumenCargaStock>>(`/api/v1/jornadas/${idJornada}/carga`, payload);
@@ -310,7 +310,7 @@ export async function cargarStockVehiculo(
  * Requiere conexión activa (no debe encolarse offline).
  */
 export async function cerrarJornada(
-  idJornada: number,
+  idJornada: string,
   payload?: CierreJornadaPayload,
 ): Promise<ApiResponse<ResumenCierre>> {
   return api.post<ApiResponse<ResumenCierre>>(`/api/v1/jornadas/${idJornada}/cierre`, payload ?? {});

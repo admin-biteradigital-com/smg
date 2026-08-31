@@ -168,10 +168,20 @@ VITE_VAPID_PUBLIC_KEY=<public key de VAPID>
 
 ---
 
+## Soporte Offline en Modo Jornada (ADR-015 Fase 2)
+
+### Alcance y Limitaciones Conocidas
+- **Apertura de Jornada (`EscenaAbrirJornada`)**: Habilitada para operar sin conexión. El cliente genera un ULID local, escribe la jornada con estado optimista `'abierta'` en la tabla `jornadas` de Dexie y encola la operación `OPEN_JORNADA` en `offline_queue` (`POST /api/v1/jornadas`).
+- **Carga de Stock (`EscenaCargarVehiculo`) y Cierre de Jornada (`EscenaCierre`)**: Continúan siendo **online-only** (requieren conexión activa síncrona). La asignación y conciliación de stock de vehículo dependen de identificadores autoincrementales del servidor, pendientes de una futura migración.
+- **Guard de Empresa (`estadoOperacion`) — Caso de Borde**: Si la empresa no está en estado `'activa'` (ej. `'configurando'`) y el vendedor abre jornada offline (donde la verificación remota de perfil se degrada tolerante), la operación encolada será rechazada por el backend SIGLO al sincronizar. La apertura quedará marcada como `failed` en la cola offline y el estado local se reconciliará al contactar al servidor.
+
+---
+
 ## Testing offline
 
 Antes de cada release verificar:
 - [ ] Chrome DevTools → Application → Service Workers → "Offline" activado
+- [ ] Abrir jornada en modo offline (vehículos y rutas desde Dexie local)
 - [ ] Registrar una venta en modo offline
 - [ ] Volver a conectar → verificar que se sincronizó en D1
 - [ ] Verificar que el indicador visual cambia correctamente en cada estado

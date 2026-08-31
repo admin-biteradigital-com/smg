@@ -17,7 +17,7 @@ import type { ResumenCierre } from '@/types';
 
 interface ModalCierreJornadaProps {
   isOpen: boolean;
-  idJornada: number;
+  idJornada: string;
   onClose: () => void;
   onSuccess: (resumen: ResumenCierre) => void;
 }

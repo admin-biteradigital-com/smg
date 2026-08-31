@@ -207,7 +207,7 @@ export async function markOperationFailed(
  * Genera un ULID simplificado (timestamp + random).
  * Para producción se puede reemplazar por la librería `ulid`.
  */
-function generateUlid(): string {
+export function generateUlid(): string {
   const ts = Date.now().toString(36).toUpperCase().padStart(10, '0');
   const rnd = Math.random().toString(36).substring(2, 12).toUpperCase().padStart(10, '0');
   return `${ts}${rnd}`;

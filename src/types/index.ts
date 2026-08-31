@@ -184,7 +184,8 @@ export type OfflineOperationType =
   | 'CREATE_CLIENTE'
   | 'CREATE_SUCURSAL'
   | 'UPDATE_ENTREGA'
-  | 'CREATE_NOTA';
+  | 'CREATE_NOTA'
+  | 'OPEN_JORNADA';
 
 export type OfflineQueueStatus = 'pending' | 'syncing' | 'failed' | 'conflict';
 
@@ -303,7 +304,7 @@ export interface StockVehiculoItem {
 }
 
 export interface Jornada {
-  id: number;
+  id: string;
   idAbonado: number;
   idVendedor: number;
   idChofer: number | null;
@@ -341,7 +342,7 @@ export interface CargarStockPayload {
 
 export interface ResumenCargaStock {
   idOrdenCarga: number;
-  idJornada: number;
+  idJornada: string;
   idVehiculo: number;
   itemsCargados: number;
 }
@@ -351,7 +352,7 @@ export interface CierreJornadaPayload {
 }
 
 export interface ResumenCierre {
-  idJornada: number;
+  idJornada: string;
   estado: 'cerrada';
   totalVentas: number;
   totalMontoVendido: number;

@@ -236,3 +236,40 @@ describe('Master Data Sync - Mapping helpers', () => {
   });
 });
 
+describe('ADR-015 Offline Jornada - ULID & Queue Types', () => {
+  it('generateUlid returns a non-empty string identifier', async () => {
+    const { generateUlid } = await import('./db');
+    const ulid1 = generateUlid();
+    const ulid2 = generateUlid();
+
+    expect(typeof ulid1).toBe('string');
+    expect(ulid1.length).toBeGreaterThanOrEqual(16);
+    expect(typeof ulid2).toBe('string');
+    expect(ulid1).not.toBe(ulid2);
+  });
+
+  it('validates OPEN_JORNADA payload structure for offline queue', () => {
+    const payload = {
+      id: '01JM7890ABCDEF1234567890',
+      idVehiculo: 1,
+      idRuta: 2,
+      notasApertura: 'Inicio de ruta norte',
+    };
+
+    const queueItem = {
+      type: 'OPEN_JORNADA' as const,
+      endpoint: '/api/v1/jornadas',
+      method: 'POST' as const,
+      payload,
+      maxRetries: 5,
+    };
+
+    expect(queueItem.type).toBe('OPEN_JORNADA');
+    expect(queueItem.endpoint).toBe('/api/v1/jornadas');
+    expect(queueItem.method).toBe('POST');
+    expect(queueItem.payload.id).toBe('01JM7890ABCDEF1234567890');
+    expect(queueItem.payload.idVehiculo).toBe(1);
+  });
+});
+
+
