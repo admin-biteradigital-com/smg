@@ -218,25 +218,39 @@ async function flushOfflineQueue(): Promise<SyncResult> {
       result.synced++;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-
-      // Si la operación rechazada era una apertura de jornada, revertir la fila optimista en Dexie
-      if (item.type === 'OPEN_JORNADA') {
-        await db.jornadas.delete(item.ulid);
-      }
+      const isConflict =
+        error instanceof Error &&
+        'status' in error &&
+        (error as { status: number }).status === 409;
+      const isClientError =
+        error instanceof Error &&
+        'status' in error &&
+        (error as { status: number }).status >= 400 &&
+        (error as { status: number }).status < 500 &&
+        (error as { status: number }).status !== 429;
+      const willRetry = !isConflict && !isClientError && item.retries + 1 < item.maxRetries;
 
       // Conflicto (409) — registrar pero no reintentar
-      if (error instanceof Error && 'status' in error && (error as { status: number }).status === 409) {
+      if (isConflict) {
         result.conflicts++;
         if (item.id !== undefined) {
           await markOperationFailed(item.id, `Conflicto: ${message}`);
         }
         result.errors.push({ ulid: item.ulid, error: `CONFLICT: ${message}` });
+        if (item.type === 'OPEN_JORNADA') {
+          await db.jornadas.delete(item.ulid);
+        }
       } else {
         result.failed++;
         if (item.id !== undefined) {
           await markOperationFailed(item.id, message);
         }
         result.errors.push({ ulid: item.ulid, error: message });
+
+        // Solo revertir la jornada optimista si es un fallo definitivo (no hay más reintentos o error 4xx no recuperable)
+        if (!willRetry && item.type === 'OPEN_JORNADA') {
+          await db.jornadas.delete(item.ulid);
+        }
       }
     }
   }
@@ -295,7 +309,8 @@ async function sendBatchSync(operations: OfflineQueueItem[]): Promise<SyncResult
       result.errors.push({ ulid: r.ulid, error: `CONFLICT: ${r.error}` });
     } else {
       await markOperationFailed(item.id, r.error ?? 'Error desconocido');
-      if (item.type === 'OPEN_JORNADA') {
+      // Solo borrar en fallo definitivo si se agotaron los reintentos
+      if (item.retries + 1 >= item.maxRetries && item.type === 'OPEN_JORNADA') {
         await db.jornadas.delete(item.ulid);
       }
       result.failed++;
