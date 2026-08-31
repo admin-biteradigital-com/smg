@@ -505,3 +505,118 @@ export interface ProductoAdminDetalle extends ProductoAdminItem {
   categoriaWeb: string | null;
   descripcionWeb: string | null;
 }
+
+// ── ADR-014: Clientes y Sucursales Admin ──────────────────────────────────────
+
+export type SegmentoCliente = 'pequeño' | 'mediano' | 'grande' | 'mayorista';
+
+export interface SucursalPrincipalInfo {
+  id: number;
+  codigo: string;
+  nombre: string;
+  direccion: string;
+  ciudad: string;
+  region: string;
+  telefono: string | null;
+  email: string | null;
+}
+
+export interface ClienteAdminItem {
+  id: number;
+  razonSocial: string;
+  rut: string;
+  segmento: SegmentoCliente | null;
+  limiteCredito: number;
+  plazoCreditoDias: number;
+  cicloReabastecimientoDias: number | null;
+  activo: boolean;
+  sucursalPrincipal: SucursalPrincipalInfo | null;
+  saldoPendiente?: number;
+}
+
+export interface SucursalAdminItem {
+  id: number;
+  idCliente: number;
+  codigo: string;
+  nombre: string;
+  direccion: string;
+  ciudad: string;
+  region: string;
+  telefono: string | null;
+  email: string | null;
+  latitud: number | null;
+  longitud: number | null;
+  esPrincipal: boolean;
+  observaciones: string | null;
+  activa: boolean;
+}
+
+export interface ClienteAdminDetalle {
+  id: number;
+  razonSocial: string;
+  rut: string;
+  segmento: SegmentoCliente | null;
+  limiteCredito: number;
+  plazoCreditoDias: number;
+  cicloReabastecimientoDias: number | null;
+  activo: boolean;
+  sucursales: SucursalAdminItem[];
+}
+
+export interface CreateClientePayload {
+  razonSocial: string;
+  rut: string;
+  segmento?: SegmentoCliente | null;
+  limiteCredito?: number;
+  plazoCreditoDias?: number;
+  cicloReabastecimientoDias?: number | null;
+  sucursalPrincipal: {
+    nombre: string;
+    direccion: string;
+    ciudad: string;
+    region: string;
+    telefono?: string | null;
+    email?: string | null;
+    latitud?: number | null;
+    longitud?: number | null;
+    observaciones?: string | null;
+  };
+}
+
+export interface UpdateClientePayload {
+  razonSocial?: string;
+  rut?: string;
+  segmento?: SegmentoCliente | null;
+  limiteCredito?: number;
+  plazoCreditoDias?: number;
+  cicloReabastecimientoDias?: number | null;
+  activo?: boolean;
+}
+
+export interface CreateSucursalPayload {
+  nombre: string;
+  direccion: string;
+  ciudad: string;
+  region: string;
+  telefono?: string | null;
+  email?: string | null;
+  latitud?: number | null;
+  longitud?: number | null;
+  esPrincipal?: boolean;
+  observaciones?: string | null;
+}
+
+export interface UpdateSucursalPayload {
+  nombre?: string;
+  direccion?: string;
+  ciudad?: string;
+  region?: string;
+  telefono?: string | null;
+  email?: string | null;
+  latitud?: number | null;
+  longitud?: number | null;
+  esPrincipal?: boolean;
+  activa?: boolean;
+  observaciones?: string | null;
+}
+

@@ -18,6 +18,13 @@ import type {
   UnidadMedidaItem,
   ProductoAdminItem,
   ProductoAdminDetalle,
+  ClienteAdminItem,
+  ClienteAdminDetalle,
+  SucursalAdminItem,
+  CreateClientePayload,
+  UpdateClientePayload,
+  CreateSucursalPayload,
+  UpdateSucursalPayload,
 } from '@/types';
 
 // ─── Configuration ────────────────────────────────────────────────────────────
@@ -486,5 +493,79 @@ export async function updateProducto(
 ): Promise<ApiResponse<ProductoAdminDetalle>> {
   return api.patch<ApiResponse<ProductoAdminDetalle>>(`/api/v1/admin/productos/${id}`, payload);
 }
+
+// ─── ADR-014: Clientes y Sucursales Admin ─────────────────────────────────────
+
+/**
+ * Obtiene el listado de clientes en modo gestión con filtros opcionales (q, activo, paginación).
+ */
+export async function getClientesAdmin(
+  filters?: { q?: string; activo?: boolean; page?: number; pageSize?: number }
+): Promise<ApiResponse<ClienteAdminItem[]>> {
+  const params = new URLSearchParams();
+  if (filters?.page) params.set('page', String(filters.page));
+  if (filters?.pageSize) params.set('pageSize', String(filters.pageSize));
+  if (filters?.q) params.set('q', filters.q);
+  if (filters?.activo !== undefined) params.set('activo', String(filters.activo));
+
+  const query = params.toString() ? `?${params.toString()}` : '';
+  return api.get<ApiResponse<ClienteAdminItem[]>>(`/api/v1/clients${query}`);
+}
+
+/**
+ * Obtiene el detalle completo de un cliente y sus sucursales por ID.
+ */
+export async function getClienteById(
+  id: number
+): Promise<ApiResponse<ClienteAdminDetalle>> {
+  return api.get<ApiResponse<ClienteAdminDetalle>>(`/api/v1/clients/${id}`);
+}
+
+/**
+ * Crea un nuevo cliente con su sucursal principal inicial.
+ */
+export async function createCliente(
+  payload: CreateClientePayload
+): Promise<ApiResponse<ClienteAdminDetalle>> {
+  return api.post<ApiResponse<ClienteAdminDetalle>>('/api/v1/clients', payload);
+}
+
+/**
+ * Actualiza los datos de un cliente existente.
+ */
+export async function updateCliente(
+  id: number,
+  payload: UpdateClientePayload
+): Promise<ApiResponse<ClienteAdminDetalle>> {
+  return api.patch<ApiResponse<ClienteAdminDetalle>>(`/api/v1/clients/${id}`, payload);
+}
+
+/**
+ * Crea una sucursal adicional para un cliente.
+ */
+export async function createSucursal(
+  clienteId: number,
+  payload: CreateSucursalPayload
+): Promise<ApiResponse<SucursalAdminItem>> {
+  return api.post<ApiResponse<SucursalAdminItem>>(
+    `/api/v1/clients/${clienteId}/sucursales`,
+    payload
+  );
+}
+
+/**
+ * Actualiza los datos de una sucursal de un cliente.
+ */
+export async function updateSucursal(
+  clienteId: number,
+  sucursalId: number,
+  payload: UpdateSucursalPayload
+): Promise<ApiResponse<SucursalAdminItem>> {
+  return api.patch<ApiResponse<SucursalAdminItem>>(
+    `/api/v1/clients/${clienteId}/sucursales/${sucursalId}`,
+    payload
+  );
+}
+
 
 

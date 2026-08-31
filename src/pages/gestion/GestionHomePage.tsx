@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Building2, DollarSign, ChevronRight, ChevronLeft, AlertCircle, Users, Truck, MapPin, Package } from 'lucide-react';
+import { Building2, DollarSign, ChevronRight, ChevronLeft, AlertCircle, Users, Truck, MapPin, Package, UserCheck } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { getEmpresaPerfil } from '@/lib/api';
 import type { EmpresaPerfil } from '@/types';
@@ -173,6 +173,27 @@ export default function GestionHomePage() {
               <p className="text-base font-bold text-zinc-100">Rutas</p>
               <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
                 Rutas de distribución y zonas
+              </p>
+            </div>
+
+            <ChevronRight className="w-5 h-5 text-zinc-600 group-hover:text-zinc-300 transition-colors shrink-0" />
+          </button>
+        )}
+
+        {/* Card 6: Clientes */}
+        {esAdmin && (
+          <button
+            onClick={() => navigate('/gestion/clientes')}
+            className="w-full p-5 bg-zinc-900/70 border border-zinc-800 hover:border-zinc-700 rounded-3xl flex items-center gap-4 transition-all active:scale-[0.98] group text-left shadow-lg"
+          >
+            <div className="p-3.5 bg-zinc-800/80 border border-zinc-700/60 text-blue-400 rounded-2xl shrink-0 group-hover:scale-110 transition-transform">
+              <UserCheck className="w-7 h-7" />
+            </div>
+
+            <div className="flex-1 min-w-0">
+              <p className="text-base font-bold text-zinc-100">Clientes</p>
+              <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
+                Cartera de clientes, sucursales y crédito
               </p>
             </div>
 
