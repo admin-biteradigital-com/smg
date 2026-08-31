@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { mapProducto, mapCliente, mapSucursal } from './sync';
+import {
+  mapProducto,
+  mapCliente,
+  mapSucursal,
+  mapVehiculo,
+  mapRuta,
+  mapStockDeposito,
+} from './sync';
 
 describe('Master Data Sync - Mapping helpers', () => {
   const timestamp = '2026-08-21T02:00:00.000Z';
@@ -124,4 +131,108 @@ describe('Master Data Sync - Mapping helpers', () => {
       updatedAt: timestamp,
     });
   });
+
+  it('maps BackendVehiculo to frontend Vehiculo correctly', () => {
+    const backendVeh = {
+      id: 1,
+      patente: 'ABCD-12',
+      marca: 'Hyundai',
+      modelo: 'Porter',
+      anio: 2022,
+      tipo: 'camioneta',
+      capacidadKg: 1500,
+      estado: 'disponible',
+    };
+
+    const mapped = mapVehiculo(backendVeh);
+
+    expect(mapped).toEqual({
+      id: 1,
+      patente: 'ABCD-12',
+      marca: 'Hyundai',
+      modelo: 'Porter',
+      anio: 2022,
+      tipo: 'camioneta',
+      capacidadKg: 1500,
+      estado: 'disponible',
+    });
+  });
+
+  it('handles null fields in BackendVehiculo', () => {
+    const backendVeh = {
+      id: 2,
+      patente: 'WXYZ-34',
+      marca: null,
+      modelo: null,
+      anio: null,
+      tipo: null,
+      capacidadKg: null,
+      estado: 'en_ruta',
+    };
+
+    const mapped = mapVehiculo(backendVeh);
+
+    expect(mapped).toEqual({
+      id: 2,
+      patente: 'WXYZ-34',
+      marca: null,
+      modelo: null,
+      anio: null,
+      tipo: null,
+      capacidadKg: null,
+      estado: 'en_ruta',
+    });
+  });
+
+  it('maps BackendRuta to frontend Ruta correctly', () => {
+    const backendRuta = {
+      id: 1,
+      nombre: 'Ruta Norte',
+      descripcion: 'Cobertura sector Alerce y Puerto Varas',
+      distanciaEstimadaKm: 45.5,
+      duracionEstimadaHoras: 3.5,
+      activa: 1,
+    };
+
+    const mapped = mapRuta(backendRuta);
+
+    expect(mapped).toEqual({
+      id: 1,
+      nombre: 'Ruta Norte',
+      descripcion: 'Cobertura sector Alerce y Puerto Varas',
+      distanciaEstimadaKm: 45.5,
+      duracionEstimadaHoras: 3.5,
+      activa: 1,
+    });
+  });
+
+  it('maps BackendStockDepositoItem to frontend StockDepositoItem correctly', () => {
+    const backendStock = {
+      id: 1,
+      producto: { id: 104, nombre: 'Turrón de Maní 25g' },
+      numeroLote: 'TLAD-202506-001',
+      fechaVencimiento: '2026-12-31',
+      cantidadActual: 58,
+      unidadBase: 'unidad',
+      diasParaVencer: 122,
+      alertaVencimiento: false,
+    };
+
+    const mapped = mapStockDeposito(backendStock, timestamp);
+
+    expect(mapped).toEqual({
+      id: 1,
+      idProducto: 104,
+      nombreProducto: 'Turrón de Maní 25g',
+      producto: { id: 104, nombre: 'Turrón de Maní 25g' },
+      numeroLote: 'TLAD-202506-001',
+      fechaVencimiento: '2026-12-31',
+      cantidadActual: 58,
+      unidadBase: 'unidad',
+      diasParaVencer: 122,
+      alertaVencimiento: false,
+      updatedAt: timestamp,
+    });
+  });
 });
+

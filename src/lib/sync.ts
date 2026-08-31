@@ -7,6 +7,9 @@ import {
   bulkUpsertProductos,
   bulkUpsertClientes,
   bulkUpsertSucursales,
+  bulkUpsertVehiculos,
+  bulkUpsertRutas,
+  bulkUpsertStockDeposito,
 } from '@/lib/db';
 import type {
   Cliente,
@@ -16,6 +19,9 @@ import type {
   SyncStatus,
   Sucursal,
   UnidadMedida,
+  Vehiculo,
+  Ruta,
+  StockDepositoItem,
 } from '@/types';
 
 // ─── State ────────────────────────────────────────────────────────────────────
@@ -314,7 +320,7 @@ async function pullFreshData(): Promise<void> {
   await syncCatalog(true);
 }
 
-// ── Backend response types (GET /api/v1/sync/master-data) ─────────────────────
+// ── Backend response types (GET /api/v1/sync/master-data, vehiculos, rutas, stock) ─
 
 interface BackendProducto {
   id: number;
@@ -353,6 +359,39 @@ interface BackendCliente {
   cicloReabastecimientoDias: number | null;
   activo: boolean;
   sucursales: BackendSucursal[];
+}
+
+export interface BackendVehiculo {
+  id: number;
+  patente: string;
+  marca: string | null;
+  modelo: string | null;
+  anio: number | null;
+  tipo: string | null;
+  capacidadKg: number | null;
+  estado: string;
+}
+
+export interface BackendRuta {
+  id: number;
+  nombre: string;
+  descripcion: string | null;
+  distanciaEstimadaKm: number | null;
+  duracionEstimadaHoras: number | null;
+  activa: number;
+}
+
+export interface BackendStockDepositoItem {
+  id: number;
+  producto?: { id: number; nombre: string };
+  idProducto?: number;
+  nombreProducto?: string;
+  numeroLote: string;
+  fechaVencimiento: string;
+  cantidadActual: number;
+  unidadBase: string;
+  diasParaVencer?: number;
+  alertaVencimiento?: boolean;
 }
 
 interface MasterDataResponse {
@@ -415,17 +454,75 @@ export function mapSucursal(s: BackendSucursal, clienteId: string, generatedAt: 
   };
 }
 
+export function mapVehiculo(v: BackendVehiculo): Vehiculo {
+  return {
+    id: v.id,
+    patente: v.patente,
+    marca: v.marca ?? null,
+    modelo: v.modelo ?? null,
+    anio: v.anio ?? null,
+    tipo: v.tipo ?? null,
+    capacidadKg: v.capacidadKg ?? null,
+    estado: v.estado,
+  };
+}
+
+export function mapRuta(r: BackendRuta): Ruta {
+  return {
+    id: r.id,
+    nombre: r.nombre,
+    descripcion: r.descripcion ?? null,
+    distanciaEstimadaKm: r.distanciaEstimadaKm ?? null,
+    duracionEstimadaHoras: r.duracionEstimadaHoras ?? null,
+    activa: r.activa,
+  };
+}
+
+export function mapStockDeposito(s: BackendStockDepositoItem, generatedAt: string): StockDepositoItem {
+  const prodId = s.producto?.id ?? s.idProducto ?? 0;
+  const prodNombre = s.producto?.nombre ?? s.nombreProducto ?? '';
+  return {
+    id: s.id,
+    idProducto: prodId,
+    nombreProducto: prodNombre,
+    producto: s.producto ?? (prodId ? { id: prodId, nombre: prodNombre } : undefined),
+    numeroLote: s.numeroLote,
+    fechaVencimiento: s.fechaVencimiento,
+    cantidadActual: s.cantidadActual,
+    unidadBase: s.unidadBase,
+    diasParaVencer: s.diasParaVencer,
+    alertaVencimiento: s.alertaVencimiento,
+    updatedAt: generatedAt,
+  };
+}
+
 // ── Pull master data ──────────────────────────────────────────────────────────
 
 /**
  * Descarga los datos maestros del servidor y los persiste en IndexedDB.
- * Consume el endpoint consolidado GET /api/v1/sync/master-data (autenticado).
+ * Consume el endpoint consolidado GET /api/v1/sync/master-data (autenticado),
+ * junto con los catálogos operativos de vehículos, rutas y stock de depósito (ADR-015).
  *
  * No borra datos locales antes de escribir — si la llamada falla,
  * IndexedDB conserva los datos previos intactos.
  */
 export async function pullMasterData(): Promise<void> {
-  const masterData = await api.get<MasterDataResponse>('/api/v1/sync/master-data');
+  const [masterData, vehiculosRes, rutasRes, stockRes] = await Promise.all([
+    api.get<MasterDataResponse>('/api/v1/sync/master-data'),
+    api.get<{ data: BackendVehiculo[] }>('/api/v1/vehiculos').catch((e) => {
+      console.warn('[Sync] No se pudieron obtener vehículos:', e);
+      return { data: [] as BackendVehiculo[] };
+    }),
+    api.get<{ data: BackendRuta[] }>('/api/v1/rutas').catch((e) => {
+      console.warn('[Sync] No se pudieron obtener rutas:', e);
+      return { data: [] as BackendRuta[] };
+    }),
+    api.get<{ data: BackendStockDepositoItem[] }>('/api/v1/stock').catch((e) => {
+      console.warn('[Sync] No se pudo obtener stock de depósito:', e);
+      return { data: [] as BackendStockDepositoItem[] };
+    }),
+  ]);
+
   const generatedAt = masterData.data.generatedAt ?? new Date().toISOString();
 
   // ── Mapear productos ──────────────────────────────────────────
@@ -444,11 +541,19 @@ export async function pullMasterData(): Promise<void> {
     }
   }
 
+  // ── Mapear vehículos, rutas y stock de depósito (ADR-015) ─────
+  const vehiculos = (vehiculosRes.data ?? []).map(mapVehiculo);
+  const rutas = (rutasRes.data ?? []).map(mapRuta);
+  const stockDeposito = (stockRes.data ?? []).map((s) => mapStockDeposito(s, generatedAt));
+
   // ── Persistir en IndexedDB ────────────────────────────────────
   await Promise.all([
     bulkUpsertProductos(productos),
     bulkUpsertClientes(clientes),
     bulkUpsertSucursales(sucursales),
+    bulkUpsertVehiculos(vehiculos),
+    bulkUpsertRutas(rutas),
+    bulkUpsertStockDeposito(stockDeposito),
   ]);
 
   // ── Actualizar timestamp de sync ──────────────────────────────
@@ -458,6 +563,9 @@ export async function pullMasterData(): Promise<void> {
     productos: productos.length,
     clientes: clientes.length,
     sucursales: sucursales.length,
+    vehiculos: vehiculos.length,
+    rutas: rutas.length,
+    stockDeposito: stockDeposito.length,
   });
 }
 

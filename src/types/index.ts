@@ -269,6 +269,22 @@ export interface Ruta {
   activa: number;
 }
 
+// ── Stock de Depósito (ADR-015) ───────────────────────────────────────────────
+
+export interface StockDepositoItem {
+  id: number;
+  idProducto: number;
+  nombreProducto?: string;
+  numeroLote: string;
+  fechaVencimiento: string;
+  cantidadActual: number;
+  unidadBase: string;
+  diasParaVencer?: number;
+  alertaVencimiento?: boolean;
+  producto?: { id: number; nombre: string };
+  updatedAt?: string;
+}
+
 // ── Jornadas ──────────────────────────────────────────────────────────────────
 
 export type EstadoJornada = 'abierta' | 'cerrada' | 'cancelada';
@@ -282,6 +298,7 @@ export interface StockVehiculoItem {
   numeroLote: string;
   fechaVencimiento: string;
   cantidad: number;
+  idJornada?: string | null;
   actualizado?: string;
 }
 
@@ -297,10 +314,14 @@ export interface Jornada {
   fechaCierre: string | null;
   notasApertura: string | null;
   notasCierre: string | null;
+  vehiculoPatente?: string;
+  vehiculoDescripcion?: string;
+  rutaNombre?: string | null;
   stockVehiculo?: StockVehiculoItem[];
 }
 
 export interface AbrirJornadaPayload {
+  id?: string | null;
   idVehiculo: number;
   idChofer?: number | null;
   idRuta?: number | null;

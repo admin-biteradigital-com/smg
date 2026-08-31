@@ -10,6 +10,11 @@ import type {
   VentaCobro,
   OfflineQueueItem,
   BorradorPedido,
+  Vehiculo,
+  Ruta,
+  StockDepositoItem,
+  Jornada,
+  StockVehiculoItem,
 } from '@/types';
 
 // ─── Database Definition ──────────────────────────────────────────────────────
@@ -45,6 +50,15 @@ class SigloDatabase extends Dexie {
 
   // ── Borradores de Pedido ──────────────────────────────────────
   borradores_pedido!: EntityTable<BorradorPedido, 'id'>;
+
+  // ── Jornadas y Stock Vehículo (ADR-015) ────────────────────────
+  jornadas!: EntityTable<Jornada, 'id'>;
+  stock_vehiculo!: EntityTable<StockVehiculoItem, 'id'>;
+
+  // ── Catálogos de Operación (ADR-015) ──────────────────────────
+  vehiculos!: EntityTable<Vehiculo, 'id'>;
+  rutas!: EntityTable<Ruta, 'id'>;
+  stock_deposito!: EntityTable<StockDepositoItem, 'id'>;
 
   constructor() {
     super('siglo_smg_db');
@@ -92,6 +106,29 @@ class SigloDatabase extends Dexie {
       // Borradores de pedido (estado en progreso)
       // ++id: autoincrement  |  id_vendedor: filtro por vendedor  |  estado, fecha_modificacion
       borradores_pedido: '++id, id_vendedor, id_cliente, estado, fecha_modificacion',
+    });
+
+    // ── Version 3 — Jornadas, Stock de Vehículo y Catálogos Operativos (ADR-015) ──
+    this.version(3).stores({
+      // Jornadas (estado de jornada activa/histórica)
+      // índices: id (PK, ULID string), idVendedor, idVehiculo, idRuta, estado, fechaApertura
+      jornadas:       'id, idVendedor, idVehiculo, idRuta, estado, fechaApertura',
+
+      // Stock asignado al vehículo en ruta
+      // índices: id (PK), idVehiculo, idProducto, idJornada, numeroLote
+      stock_vehiculo: 'id, idVehiculo, idProducto, idJornada, numeroLote',
+
+      // Flota de vehículos disponibles
+      // índices: id (PK), patente, estado
+      vehiculos:      'id, patente, estado',
+
+      // Rutas de distribución
+      // índices: id (PK), nombre, activa
+      rutas:          'id, nombre, activa',
+
+      // Stock disponible en depósito central
+      // índices: id (PK), idProducto, numeroLote, fechaVencimiento
+      stock_deposito: 'id, idProducto, numeroLote, fechaVencimiento',
     });
   }
 }
@@ -211,4 +248,24 @@ export async function bulkUpsertPedidos(pedidos: Pedido[]): Promise<void> {
 
 export async function bulkUpsertVentasCobros(cobros: VentaCobro[]): Promise<void> {
   await db.ventas_cobros.bulkPut(cobros);
+}
+
+export async function bulkUpsertVehiculos(vehiculos: Vehiculo[]): Promise<void> {
+  await db.vehiculos.bulkPut(vehiculos);
+}
+
+export async function bulkUpsertRutas(rutas: Ruta[]): Promise<void> {
+  await db.rutas.bulkPut(rutas);
+}
+
+export async function bulkUpsertStockDeposito(stock: StockDepositoItem[]): Promise<void> {
+  await db.stock_deposito.bulkPut(stock);
+}
+
+export async function bulkUpsertJornadas(jornadas: Jornada[]): Promise<void> {
+  await db.jornadas.bulkPut(jornadas);
+}
+
+export async function bulkUpsertStockVehiculo(stock: StockVehiculoItem[]): Promise<void> {
+  await db.stock_vehiculo.bulkPut(stock);
 }
