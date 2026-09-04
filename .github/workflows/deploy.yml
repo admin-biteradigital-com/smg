@@ -89,6 +89,12 @@ jobs:
           name: dist
           path: dist/
 
+      # NOTA DE ARQUITECTURA / CLOUDFLARE PAGES:
+      # El proyecto Cloudflare Pages 'smg-staging' tiene su entorno de Producción (el que
+      # resuelve smg-staging.biteradigital.com) mapeado a la rama Pages 'staging'.
+      # Aunque el trigger de GitHub Actions proviene de la rama git 'develop', se debe especificar
+      # explícitamente branch: staging. De lo contrario, Cloudflare clasifica el deploy como
+      # 'Preview' bajo la rama 'develop' y nunca se promueve al dominio de staging.
       - name: Deploy a Cloudflare Pages (staging)
         uses: cloudflare/pages-action@v1
         with:
@@ -97,7 +103,7 @@ jobs:
           projectName: smg-staging
           directory: dist
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
-          branch: develop
+          branch: staging
 
   # ── DEPLOY PRODUCCIÓN — push a main ──────────────────────────────────────
   deploy-production:
