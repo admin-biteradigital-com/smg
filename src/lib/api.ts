@@ -25,6 +25,9 @@ import type {
   UpdateClientePayload,
   CreateSucursalPayload,
   UpdateSucursalPayload,
+  ProveedorAdminItem,
+  CreateProveedorPayload,
+  UpdateProveedorPayload,
 } from '@/types';
 
 // ─── Configuration ────────────────────────────────────────────────────────────
@@ -565,6 +568,61 @@ export async function updateSucursal(
     `/api/v1/clients/${clienteId}/sucursales/${sucursalId}`,
     payload
   );
+}
+
+// ─── ADR-017: Proveedores Admin ───────────────────────────────────────────────
+
+/**
+ * Obtiene el listado de proveedores en modo gestión con filtros opcionales (q, activo, paginación).
+ */
+export async function getProveedoresAdmin(
+  filters?: { q?: string; activo?: boolean | 'all'; page?: number; pageSize?: number }
+): Promise<ApiResponse<ProveedorAdminItem[]>> {
+  const params = new URLSearchParams();
+  if (filters?.page) params.set('page', String(filters.page));
+  if (filters?.pageSize) params.set('pageSize', String(filters.pageSize));
+  if (filters?.q) params.set('q', filters.q);
+  if (filters?.activo !== undefined) params.set('activo', String(filters.activo));
+
+  const query = params.toString() ? `?${params.toString()}` : '';
+  return api.get<ApiResponse<ProveedorAdminItem[]>>(`/api/v1/proveedores${query}`);
+}
+
+/**
+ * Obtiene el detalle de un proveedor por ID.
+ */
+export async function getProveedorById(
+  id: number
+): Promise<ApiResponse<ProveedorAdminItem>> {
+  return api.get<ApiResponse<ProveedorAdminItem>>(`/api/v1/proveedores/${id}`);
+}
+
+/**
+ * Crea un nuevo proveedor comprobando unicidad de RUT.
+ */
+export async function createProveedor(
+  payload: CreateProveedorPayload
+): Promise<ApiResponse<ProveedorAdminItem>> {
+  return api.post<ApiResponse<ProveedorAdminItem>>('/api/v1/proveedores', payload);
+}
+
+/**
+ * Actualiza los datos de un proveedor existente (incluye cambios de estado).
+ */
+export async function updateProveedor(
+  id: number,
+  payload: UpdateProveedorPayload
+): Promise<ApiResponse<ProveedorAdminItem>> {
+  return api.patch<ApiResponse<ProveedorAdminItem>>(`/api/v1/proveedores/${id}`, payload);
+}
+
+/**
+ * Baja lógica (soft delete) de un proveedor en SIGLO.
+ */
+export async function deleteProveedor(
+  id: number
+): Promise<ApiResponse<ProveedorAdminItem>> {
+  return api.delete<ApiResponse<ProveedorAdminItem>>(`/api/v1/proveedores/${id}`);
 }
 
 

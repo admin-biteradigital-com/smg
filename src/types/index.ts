@@ -620,3 +620,37 @@ export interface UpdateSucursalPayload {
   observaciones?: string | null;
 }
 
+// ── ADR-017 / Proveedores Admin ───────────────────────────────────────────────
+
+export interface ProveedorAdminItem {
+  id: number;
+  idAbonado: number;
+  nombre: string;
+  rut: string;
+  contacto: string | null;
+  telefono: string | null;
+  email: string | null;
+  direccion: string | null;
+  activo: boolean;
+  creado: string;
+}
+
+export interface CreateProveedorPayload {
+  nombre: string;
+  rut: string;
+  contacto?: string | null;
+  telefono?: string | null;
+  email?: string | null;
+  direccion?: string | null;
+}
+
+export interface UpdateProveedorPayload {
+  nombre?: string;
+  rut?: string;
+  contacto?: string | null;
+  telefono?: string | null;
+  email?: string | null;
+  direccion?: string | null;
+  activo?: boolean;
+}
+
