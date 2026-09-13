@@ -235,3 +235,5 @@ export default function App() {
   </UpdateProvider>
   );
 }
+
+// deploy trivial ADR-018 09/13/2026 14:09:43
