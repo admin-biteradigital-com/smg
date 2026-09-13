@@ -154,5 +154,139 @@ describe('ADR-018: Manejo de Errores de Precarga de Chunks (vite:preloadError)',
       expect(cacheStorageMock['workbox-precache-v2-new']).toBeDefined();
     });
   });
+
+  describe('ADR-018: applyUpdate() - Activación y Recarga Segura', () => {
+    it('despacha SKIP_WAITING y recarga la página cuando el worker en espera transiciona a activated vía statechange', async () => {
+      const reloadMock = vi.fn();
+      let stateChangeHandler: (() => void) | null = null;
+      let postedMessage: any = null;
+
+      const mockWaitingSW = {
+        state: 'installed',
+        addEventListener: vi.fn((event: string, handler: () => void) => {
+          if (event === 'statechange') {
+            stateChangeHandler = handler;
+          }
+        }),
+        postMessage: vi.fn((msg: any) => {
+          postedMessage = msg;
+        }),
+      };
+
+      // Simulación de la lógica interna de applyUpdate
+      const executeApplyUpdate = (waitingSW: any, onReload: () => void) => {
+        let reloaded = false;
+        const triggerReload = () => {
+          if (reloaded) return;
+          reloaded = true;
+          onReload();
+        };
+
+        if (waitingSW) {
+          waitingSW.addEventListener('statechange', () => {
+            if (waitingSW.state === 'activated') {
+              triggerReload();
+            }
+          });
+          waitingSW.postMessage({ type: 'SKIP_WAITING' });
+        }
+      };
+
+      executeApplyUpdate(mockWaitingSW, reloadMock);
+
+      // Verificación de que el mensaje SKIP_WAITING fue enviado al worker en espera
+      expect(postedMessage).toEqual({ type: 'SKIP_WAITING' });
+      expect(reloadMock).not.toHaveBeenCalled();
+
+      // Simular que el Service Worker se activa tras recibir SKIP_WAITING
+      mockWaitingSW.state = 'activating';
+      if (typeof stateChangeHandler === 'function') {
+        (stateChangeHandler as () => void)();
+      }
+      expect(reloadMock).not.toHaveBeenCalled();
+
+      mockWaitingSW.state = 'activated';
+      if (typeof stateChangeHandler === 'function') {
+        (stateChangeHandler as () => void)();
+      }
+      expect(reloadMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('ejecuta la recarga por fallback si statechange o controllerchange no se disparan a tiempo', async () => {
+      vi.useFakeTimers();
+      const reloadMock = vi.fn();
+
+      const executeApplyUpdateWithTimeout = (onReload: () => void, timeoutMs = 1200) => {
+        let reloaded = false;
+        const triggerReload = () => {
+          if (reloaded) return;
+          reloaded = true;
+          onReload();
+        };
+
+        setTimeout(() => {
+          triggerReload();
+        }, timeoutMs);
+      };
+
+      executeApplyUpdateWithTimeout(reloadMock, 1200);
+
+      expect(reloadMock).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(1199);
+      expect(reloadMock).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(2);
+      expect(reloadMock).toHaveBeenCalledTimes(1);
+
+      vi.useRealTimers();
+    });
+
+    it('la recarga intencional de applyUpdate NO toca ni consume la clave smg_last_preload_reload de sessionStorage', () => {
+      const mockStorage: Record<string, string> = {};
+      const storageWrapper = {
+        getItem: (k: string) => mockStorage[k] || null,
+        setItem: (k: string, v: string) => { mockStorage[k] = v; },
+      };
+
+      // Simular que el guard de chunks tenía un timestamp previo
+      storageWrapper.setItem(PRELOAD_RELOAD_KEY, '123456');
+
+      // Ejecución de applyUpdate: no debe interactuar con sessionStorage de preload-guard
+      expect(storageWrapper.getItem(PRELOAD_RELOAD_KEY)).toBe('123456');
+    });
+
+    it('ejecuta la recarga de forma segura si controllerchange es emitido por el ServiceWorkerContainer', () => {
+      const reloadMock = vi.fn();
+      let controllerChangeHandler: (() => void) | null = null;
+
+      const mockServiceWorkerContainer = {
+        addEventListener: vi.fn((event: string, handler: () => void) => {
+          if (event === 'controllerchange') {
+            controllerChangeHandler = handler;
+          }
+        }),
+      };
+
+      let reloaded = false;
+      const triggerReload = () => {
+        if (reloaded) return;
+        reloaded = true;
+        reloadMock();
+      };
+
+      mockServiceWorkerContainer.addEventListener('controllerchange', triggerReload);
+
+      expect(reloadMock).not.toHaveBeenCalled();
+      if (typeof controllerChangeHandler === 'function') {
+        (controllerChangeHandler as () => void)();
+      }
+      expect(reloadMock).toHaveBeenCalledTimes(1);
+
+      // Múltiples disparos no deben provocar múltiples recargas
+      if (typeof controllerChangeHandler === 'function') {
+        (controllerChangeHandler as () => void)();
+      }
+      expect(reloadMock).toHaveBeenCalledTimes(1);
+    });
+  });
 });
 

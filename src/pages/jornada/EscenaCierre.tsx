@@ -31,7 +31,7 @@ import type { ResumenCierre } from '@/types';
 export default function EscenaCierrePage() {
   const navigate = useNavigate();
   const { jornada, loading: jornadaLoading, refreshJornada } = useJornada();
-  const { updateAvailable, applyUpdate } = useUpdate();
+  const { updateAvailable, applyUpdate, isUpdating } = useUpdate();
 
   const [notasCierre, setNotasCierre] = useState('');
   const [pendingQueueCount, setPendingQueueCount] = useState<number>(0);
@@ -168,6 +168,7 @@ export default function EscenaCierrePage() {
           {/* Botón Volver al Inicio (ADR-018: si hay actualización pendiente, se aplica aquí de forma voluntaria al salir) */}
           <button
             type="button"
+            disabled={isUpdating}
             onClick={() => {
               if (updateAvailable) {
                 applyUpdate();
@@ -175,10 +176,19 @@ export default function EscenaCierrePage() {
                 navigate('/');
               }
             }}
-            className="w-full py-3.5 bg-gradient-to-r from-brand-600 to-accent-600 hover:from-brand-500 hover:to-accent-500 text-white font-bold rounded-2xl shadow-lg shadow-brand-500/20 transition-all active:scale-[0.98] text-xs flex items-center justify-center gap-2"
+            className="w-full py-3.5 bg-gradient-to-r from-brand-600 to-accent-600 hover:from-brand-500 hover:to-accent-500 disabled:opacity-75 disabled:cursor-not-allowed text-white font-bold rounded-2xl shadow-lg shadow-brand-500/20 transition-all active:scale-[0.98] text-xs flex items-center justify-center gap-2"
           >
-            <Home className="w-4 h-4" />
-            <span>{updateAvailable ? 'Actualizar y Salir' : 'Volver al Inicio'}</span>
+            {isUpdating ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Actualizando aplicación...</span>
+              </>
+            ) : (
+              <>
+                <Home className="w-4 h-4" />
+                <span>{updateAvailable ? 'Actualizar y Salir' : 'Volver al Inicio'}</span>
+              </>
+            )}
           </button>
         </div>
       </JornadaLayout>

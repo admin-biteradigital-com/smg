@@ -8,7 +8,7 @@ import { useUpdate } from '@/contexts/UpdateContext';
  * aplicarla de forma inmediata y voluntaria con un toque.
  */
 export function GestionUpdateToast() {
-  const { updateAvailable, applyUpdate } = useUpdate();
+  const { updateAvailable, applyUpdate, isUpdating } = useUpdate();
   const [dismissed, setDismissed] = useState(false);
 
   if (!updateAvailable || dismissed) {
@@ -40,11 +40,12 @@ export function GestionUpdateToast() {
         <div className="flex items-center gap-1.5 shrink-0">
           <button
             type="button"
+            disabled={isUpdating}
             onClick={applyUpdate}
-            className="px-3 py-1.5 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-md shadow-violet-500/20 transition-all active:scale-95"
+            className="px-3 py-1.5 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-75 disabled:cursor-not-allowed text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-md shadow-violet-500/20 transition-all active:scale-95"
           >
-            <RefreshCw className="w-3.5 h-3.5" />
-            <span>Actualizar</span>
+            <RefreshCw className={`w-3.5 h-3.5 ${isUpdating ? 'animate-spin' : ''}`} />
+            <span>{isUpdating ? 'Actualizando...' : 'Actualizar'}</span>
           </button>
 
           <button
