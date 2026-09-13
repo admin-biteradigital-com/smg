@@ -26,6 +26,9 @@
    - **Producción:** Deploy a producción ejecutado al hacer push a `main`, requiriendo **aprobación manual** del ambiente en GitHub Actions.
    - *Nota:* Ambos comportamientos son intencionales y deliberados. **No modificar el pipeline de CI/CD sin autorización explícita de Zelmar.**
 
+7. **Prohibición Estricta de Automatización contra Staging y Producción:**
+   - **NUNCA** intentar autenticarse ni controlar un navegador de forma automatizada contra Staging o Producción. Magic link está diseñado para bloquear accesos automatizados. Toda validación en navegador real la ejecuta exclusivamente Zelmar.
+
 ---
 
 ## Protocolo de cierre de sesión (obligatorio antes de reportar "completado")

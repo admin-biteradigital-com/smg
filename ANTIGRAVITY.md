@@ -244,3 +244,17 @@ Ver especificación completa en el repo `siglo/docs/api/endpoints/`:
 | Dispositivo objetivo | Android (primary), iOS (secondary) |
 | **Métrica de éxito del Go-Live** | **100% de ventas reales por la app en las primeras 4 semanas (ADR-010, repo siglo)** |
 | **Canal de soporte** | **WhatsApp Business a Zelmar (urgente) · administracion@biteradigital.com (no urgente) — sin SLA formal** |
+
+---
+
+## Regla Permanente de Validación y Testing
+
+### Prohibición Estricta de Automatización de Navegador contra Staging y Producción
+
+- **NUNCA** intentar autenticarse ni controlar un navegador de forma automatizada contra los entornos de Staging (`https://smg-staging.biteradigital.com`) o Producción (`https://smg.biteradigital.com`).
+- La autenticación basada en Magic Link está diseñada de forma intencional para bloquear accesos no humanos; cualquier intento automatizado fallará y consumirá recursos en bucles inútiles.
+- **Toda validación en navegador real la realiza exclusivamente Zelmar.**
+- La validación por parte del agente debe resolverse exclusivamente mediante:
+  1. Lectura y análisis estático riguroso del código fuente.
+  2. Pruebas unitarias aisladas en Vitest mockeando las APIs del navegador (`navigator.serviceWorker`, `window.location`, `sessionStorage`, etc.).
+  3. Guía de pasos manuales: Si se requiere confirmación en navegador real, redactar una guía concisa de pasos para que Zelmar la ejecute en su entorno.
