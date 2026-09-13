@@ -498,13 +498,30 @@ export interface ProductoAdminItem {
   nombreUnidadBase: string;
 }
 
+// ── ADR-019: Relación Producto - Proveedor ───────────────────────────────────
+
+export interface ProveedorProductoItem {
+  id: number;
+  nombre: string;
+  rut: string;
+}
+
+export interface AsociarProveedorResponse {
+  id: string | number;
+  idProducto: number;
+  idProveedor: number;
+  creado: string;
+}
+
 export interface ProductoAdminDetalle extends ProductoAdminItem {
   idUnidadVenta: number | null;
   idUnidadCompra: number | null;
   precioOferta: number | null;
   categoriaWeb: string | null;
   descripcionWeb: string | null;
+  proveedores?: ProveedorProductoItem[];
 }
+
 
 // ── ADR-014: Clientes y Sucursales Admin ──────────────────────────────────────
 

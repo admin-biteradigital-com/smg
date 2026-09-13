@@ -28,6 +28,7 @@ import type {
   ProveedorAdminItem,
   CreateProveedorPayload,
   UpdateProveedorPayload,
+  AsociarProveedorResponse,
 } from '@/types';
 
 // ─── Configuration ────────────────────────────────────────────────────────────
@@ -623,6 +624,34 @@ export async function deleteProveedor(
   id: number
 ): Promise<ApiResponse<ProveedorAdminItem>> {
   return api.delete<ApiResponse<ProveedorAdminItem>>(`/api/v1/proveedores/${id}`);
+}
+
+// ─── ADR-019: Relación Producto - Proveedor ───────────────────────────────────
+
+/**
+ * Asocia un proveedor existente a un producto en SIGLO.
+ * Body estricto: { id_proveedor: number }
+ */
+export async function asociarProveedorAProducto(
+  idProducto: number,
+  idProveedor: number
+): Promise<ApiResponse<AsociarProveedorResponse>> {
+  return api.post<ApiResponse<AsociarProveedorResponse>>(
+    `/api/v1/admin/productos/${idProducto}/proveedores`,
+    { id_proveedor: idProveedor }
+  );
+}
+
+/**
+ * Desasocia un proveedor de un producto en SIGLO.
+ */
+export async function desasociarProveedorDeProducto(
+  idProducto: number,
+  idProveedor: number
+): Promise<ApiResponse<{ success: boolean }>> {
+  return api.delete<ApiResponse<{ success: boolean }>>(
+    `/api/v1/admin/productos/${idProducto}/proveedores/${idProveedor}`
+  );
 }
 
 

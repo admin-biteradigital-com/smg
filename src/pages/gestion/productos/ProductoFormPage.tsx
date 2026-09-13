@@ -12,15 +12,22 @@ import {
   DollarSign,
   ToggleLeft,
   ToggleRight,
+  Store,
+  Plus,
+  Trash2,
 } from 'lucide-react';
 import {
   getUnidadesMedida,
   getProductoAdminById,
   createProducto,
   updateProducto,
+  getProveedoresAdmin,
+  asociarProveedorAProducto,
+  desasociarProveedorDeProducto,
   ApiRequestError,
 } from '@/lib/api';
-import type { UnidadMedidaItem } from '@/types';
+import type { UnidadMedidaItem, ProveedorAdminItem, ProveedorProductoItem } from '@/types';
+import { formatRut } from '@/lib/rut';
 
 export default function ProductoFormPage() {
   const navigate = useNavigate();
@@ -35,6 +42,16 @@ export default function ProductoFormPage() {
   // Estados de feedback
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [exitoMsg, setExitoMsg] = useState<string | null>(null);
+
+  // Proveedores (ADR-019, solo modo edición)
+  const [proveedoresAsociados, setProveedoresAsociados] = useState<ProveedorProductoItem[]>([]);
+  const [todosProveedores, setTodosProveedores] = useState<ProveedorAdminItem[]>([]);
+  const [selectedProveedorId, setSelectedProveedorId] = useState<string>('');
+  const [asociando, setAsociando] = useState(false);
+  const [desasociandoId, setDesasociandoId] = useState<number | null>(null);
+  const [proveedorParaQuitar, setProveedorParaQuitar] = useState<ProveedorProductoItem | null>(null);
+  const [proveedorErrorMsg, setProveedorErrorMsg] = useState<string | null>(null);
+  const [proveedorExitoMsg, setProveedorExitoMsg] = useState<string | null>(null);
 
   // Campos: Identificación
   const [nombre, setNombre] = useState('');
@@ -71,9 +88,19 @@ export default function ProductoFormPage() {
           setIdUnidadBase(String(listaUnidades[0].id));
         }
 
-        // Si es edición, cargar el producto
+        // Si es edición, cargar el producto y proveedores activos
         if (isEditing && id) {
-          const resProd = await getProductoAdminById(Number(id));
+          // Se utiliza pageSize: 500 para evitar paginación compleja en este selector,
+          // dado que una distribuidora como SMG maneja un catálogo acotado de proveedores.
+          // 500 otorga un margen holgado sin riesgo de cortes silenciosos a mediano plazo.
+          const [resProd, resProv] = await Promise.all([
+            getProductoAdminById(Number(id)),
+            getProveedoresAdmin({ activo: true, pageSize: 500 }).catch((e) => {
+              console.error('[ProductoFormPage] Error al cargar proveedores:', e);
+              return { data: [] as ProveedorAdminItem[] };
+            }),
+          ]);
+
           if (resProd?.data) {
             const prod = resProd.data;
             setNombre(prod.nombre || '');
@@ -111,7 +138,10 @@ export default function ProductoFormPage() {
 
             setActivo(prod.activo ?? 1);
             setVisiblePublico(prod.visiblePublico ?? 0);
+            setProveedoresAsociados(prod.proveedores || []);
           }
+
+          setTodosProveedores(resProv?.data || []);
         }
       } catch (err: unknown) {
         console.error('[ProductoFormPage] Error al cargar datos iniciales:', err);
@@ -129,6 +159,68 @@ export default function ProductoFormPage() {
 
     loadData();
   }, [id, isEditing]);
+
+  // Proveedores disponibles: activos que aún no han sido asociados a este producto
+  const proveedoresDisponibles = todosProveedores.filter(
+    (tp) => !proveedoresAsociados.some((pa) => pa.id === tp.id)
+  );
+
+  const handleAsociarProveedor = async () => {
+    if (!selectedProveedorId || !id) return;
+    const idProv = Number(selectedProveedorId);
+    const provObj = todosProveedores.find((p) => p.id === idProv);
+    if (!provObj) return;
+
+    setAsociando(true);
+    setProveedorErrorMsg(null);
+    setProveedorExitoMsg(null);
+
+    try {
+      await asociarProveedorAProducto(Number(id), idProv);
+      setProveedoresAsociados((prev) => [
+        ...prev,
+        { id: provObj.id, nombre: provObj.nombre, rut: provObj.rut },
+      ]);
+      setSelectedProveedorId('');
+      setProveedorExitoMsg(`Proveedor "${provObj.nombre}" asociado correctamente.`);
+    } catch (err: unknown) {
+      console.error('[ProductoFormPage] Error al asociar proveedor:', err);
+      const msg =
+        err instanceof ApiRequestError
+          ? err.message
+          : err instanceof Error
+          ? err.message
+          : 'No se pudo asociar el proveedor.';
+      setProveedorErrorMsg(msg);
+    } finally {
+      setAsociando(false);
+    }
+  };
+
+  const handleConfirmarQuitar = async (p: ProveedorProductoItem) => {
+    if (!id) return;
+    setDesasociandoId(p.id);
+    setProveedorErrorMsg(null);
+    setProveedorExitoMsg(null);
+
+    try {
+      await desasociarProveedorDeProducto(Number(id), p.id);
+      setProveedoresAsociados((prev) => prev.filter((item) => item.id !== p.id));
+      setProveedorParaQuitar(null);
+      setProveedorExitoMsg(`Asociación con "${p.nombre}" eliminada.`);
+    } catch (err: unknown) {
+      console.error('[ProductoFormPage] Error al desasociar proveedor:', err);
+      const msg =
+        err instanceof ApiRequestError
+          ? err.message
+          : err instanceof Error
+          ? err.message
+          : 'No se pudo quitar la asociación.';
+      setProveedorErrorMsg(msg);
+    } finally {
+      setDesasociandoId(null);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -546,6 +638,193 @@ export default function ProductoFormPage() {
                 </div>
               </div>
             </section>
+
+            {/* SECCIÓN 5: Proveedores (ADR-019 - Solo visible en modo edición) */}
+            {isEditing && (
+              <section className="bg-zinc-900/60 border border-zinc-800 rounded-3xl p-5 space-y-4">
+                <div className="border-b border-zinc-800 pb-3 flex items-center justify-between">
+                  <div>
+                    <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                      <Store className="w-4 h-4 text-violet-400" />
+                      Proveedores Asignados
+                    </h2>
+                    <p className="text-[11px] text-zinc-400 mt-0.5">
+                      Empresas y distribuidores que suministran este producto.
+                    </p>
+                  </div>
+                  <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-violet-500/15 border border-violet-500/30 text-violet-300">
+                    {proveedoresAsociados.length} {proveedoresAsociados.length === 1 ? 'asociado' : 'asociados'}
+                  </span>
+                </div>
+
+                {/* Mensajes de Feedback de Proveedores */}
+                {proveedorExitoMsg && (
+                  <div className="flex items-center gap-2 p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-emerald-300 text-xs animate-in fade-in">
+                    <CheckCircle2 className="w-4 h-4 shrink-0" />
+                    <span>{proveedorExitoMsg}</span>
+                  </div>
+                )}
+
+                {proveedorErrorMsg && (
+                  <div className="flex items-center gap-2 p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-300 text-xs animate-in fade-in">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{proveedorErrorMsg}</span>
+                  </div>
+                )}
+
+                {/* Formulario para Asociar Proveedor */}
+                <div className="space-y-2 pt-1">
+                  <label className="block text-xs font-semibold text-zinc-300">
+                    Asociar nuevo proveedor
+                  </label>
+                  <div className="flex flex-col sm:flex-row gap-2.5">
+                    <select
+                      value={selectedProveedorId}
+                      onChange={(e) => {
+                        setSelectedProveedorId(e.target.value);
+                        setProveedorErrorMsg(null);
+                      }}
+                      disabled={asociando || proveedoresDisponibles.length === 0}
+                      className="w-full sm:flex-1 px-3.5 py-2.5 bg-zinc-950 border border-zinc-800 focus:border-violet-500 rounded-xl text-xs text-zinc-100 focus:outline-none transition-colors disabled:opacity-50"
+                    >
+                      {proveedoresDisponibles.length === 0 ? (
+                        <option value="">
+                          {todosProveedores.length === 0
+                            ? 'No hay proveedores activos registrados'
+                            : 'Todos los proveedores activos ya están asociados'}
+                        </option>
+                      ) : (
+                        <>
+                          <option value="">-- Seleccionar proveedor activo --</option>
+                          {proveedoresDisponibles.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.nombre} ({formatRut(p.rut)})
+                            </option>
+                          ))}
+                        </>
+                      )}
+                    </select>
+
+                    <button
+                      type="button"
+                      onClick={handleAsociarProveedor}
+                      disabled={!selectedProveedorId || asociando}
+                      className="px-4 py-2.5 bg-violet-600 hover:bg-violet-500 disabled:opacity-40 disabled:hover:bg-violet-600 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 shrink-0 shadow-sm"
+                    >
+                      {asociando ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>Asociando...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Asociar</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Lista de Proveedores Asociados */}
+                <div className="space-y-2 pt-2 border-t border-zinc-800/60">
+                  <div className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
+                    Proveedores vinculados ({proveedoresAsociados.length})
+                  </div>
+
+                  {proveedoresAsociados.length === 0 ? (
+                    <div className="p-4 rounded-2xl border border-dashed border-zinc-800 text-center bg-zinc-950/30">
+                      <p className="text-xs text-zinc-400">
+                        Este producto no tiene proveedores asociados.
+                      </p>
+                      <p className="text-[11px] text-zinc-600 mt-0.5">
+                        Selecciona un proveedor de la lista superior para vincularlo.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {proveedoresAsociados.map((prov) => {
+                        const isConfirming = proveedorParaQuitar?.id === prov.id;
+                        const isRemoving = desasociandoId === prov.id;
+
+                        return (
+                          <div
+                            key={prov.id}
+                            className={`p-3 rounded-2xl border transition-all ${
+                              isConfirming
+                                ? 'bg-rose-950/20 border-rose-500/40 ring-1 ring-rose-500/30'
+                                : 'bg-zinc-950/60 border-zinc-800 hover:border-zinc-700'
+                            }`}
+                          >
+                            {isConfirming ? (
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                                <div>
+                                  <span className="text-xs font-semibold text-rose-300">
+                                    ¿Quitar asociación con este proveedor?
+                                  </span>
+                                  <p className="text-[11px] text-zinc-400 font-medium">
+                                    {prov.nombre} ({formatRut(prov.rut)})
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleConfirmarQuitar(prov)}
+                                    disabled={isRemoving}
+                                    className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white font-bold rounded-lg text-xs flex items-center gap-1.5 transition-all shadow-sm"
+                                  >
+                                    {isRemoving ? (
+                                      <>
+                                        <Loader2 className="w-3 h-3 animate-spin" />
+                                        <span>Quitando...</span>
+                                      </>
+                                    ) : (
+                                      <span>Confirmar</span>
+                                    )}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setProveedorParaQuitar(null)}
+                                    disabled={isRemoving}
+                                    className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-medium rounded-lg text-xs transition-colors"
+                                  >
+                                    Cancelar
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="min-w-0">
+                                  <div className="text-xs font-semibold text-zinc-200 truncate">
+                                    {prov.nombre}
+                                  </div>
+                                  <div className="text-[11px] text-zinc-400 font-mono">
+                                    {formatRut(prov.rut)}
+                                  </div>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setProveedorParaQuitar(prov);
+                                    setProveedorErrorMsg(null);
+                                    setProveedorExitoMsg(null);
+                                  }}
+                                  className="px-2.5 py-1.5 rounded-lg text-zinc-400 hover:text-rose-400 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20 text-xs font-medium flex items-center gap-1.5 transition-all"
+                                  title="Quitar proveedor de este producto"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <span className="hidden sm:inline">Quitar</span>
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </section>
+            )}
 
             {/* Footer Fijo con Botón Guardar */}
             <div className="fixed bottom-0 left-0 right-0 z-30 bg-zinc-950/95 backdrop-blur-md border-t border-zinc-800 px-4 py-3">
