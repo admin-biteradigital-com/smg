@@ -13,12 +13,31 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      registerType: 'prompt',
       includeAssets: ['icons/*.png', 'favicon.ico'],
       workbox: {
+        skipWaiting: false,
+        clientsClaim: false,
+        navigateFallback: null,
         // Cache all static assets with Cache First strategy
         globPatterns: ['**/*.{js,css,html,ico,png,svg,webp,woff,woff2}'],
         runtimeCaching: [
+          {
+            // ADR-018: Navegaciones Network-First (2s timeout) con fallback al precache index.html
+            urlPattern: ({ request }) => request.mode === 'navigate',
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'html-nav-cache',
+              networkTimeoutSeconds: 2,
+              precacheFallback: {
+                fallbackURL: 'index.html',
+              },
+              expiration: {
+                maxAgeSeconds: 60 * 60 * 24, // 24 hours
+                maxEntries: 10,
+              },
+            },
+          },
           {
             // Catálogo y configuración pública: stale-while-revalidate (4h)
             urlPattern: ({ url }) =>

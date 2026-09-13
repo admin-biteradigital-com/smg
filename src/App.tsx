@@ -4,7 +4,10 @@ import { Loader2 } from 'lucide-react';
 import { initConnectivityListeners } from '@/lib/sync';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { JornadaProvider, useJornada } from '@/contexts/JornadaContext';
+import { UpdateProvider } from '@/contexts/UpdateContext';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
+import ChunkErrorBoundary from '@/components/common/ChunkErrorBoundary';
+import GestionUpdateToast from '@/components/gestion/GestionUpdateToast';
 
 // ── Componente de Fallback Simple para Suspense ──────────────────────────────
 function LoadingFallback() {
@@ -107,8 +110,9 @@ function JornadaResumeGuard() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
+    <UpdateProvider>
+      <AuthProvider>
+        <BrowserRouter>
         {/* SyncBootstrap vive dentro de AuthProvider para leer isLoading.
             Solo inicia el sync DESPUÉS de que fetchMe() resuelve la sesión,
             evitando 401s espurios de catalog/orders que dispararían el
@@ -149,6 +153,7 @@ export default function App() {
             element={
               <ProtectedRoute allowedRoles={['admin']}>
                 <Suspense fallback={<LoadingFallback />}>
+                  <GestionUpdateToast />
                   <Outlet />
                 </Suspense>
               </ProtectedRoute>
@@ -193,9 +198,11 @@ export default function App() {
           <Route
             element={
               <ProtectedRoute allowedRoles={['vendedor', 'chofer', 'admin']}>
-                <Suspense fallback={<LoadingFallback />}>
-                  <JornadaProviderRoute />
-                </Suspense>
+                <ChunkErrorBoundary>
+                  <Suspense fallback={<LoadingFallback />}>
+                    <JornadaProviderRoute />
+                  </Suspense>
+                </ChunkErrorBoundary>
               </ProtectedRoute>
             }
           >
@@ -225,5 +232,6 @@ export default function App() {
         </Routes>
       </BrowserRouter>
     </AuthProvider>
+  </UpdateProvider>
   );
 }

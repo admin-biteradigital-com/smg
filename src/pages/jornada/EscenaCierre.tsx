@@ -17,6 +17,7 @@ import {
   PackageCheck,
 } from 'lucide-react';
 import { useJornada } from '@/contexts/JornadaContext';
+import { useUpdate } from '@/contexts/UpdateContext';
 import JornadaLayout from '@/components/layout/JornadaLayout';
 import { cerrarJornada, ApiRequestError } from '@/lib/api';
 import { db, getPendingCount } from '@/lib/db';
@@ -30,6 +31,7 @@ import type { ResumenCierre } from '@/types';
 export default function EscenaCierrePage() {
   const navigate = useNavigate();
   const { jornada, loading: jornadaLoading, refreshJornada } = useJornada();
+  const { updateAvailable, applyUpdate } = useUpdate();
 
   const [notasCierre, setNotasCierre] = useState('');
   const [pendingQueueCount, setPendingQueueCount] = useState<number>(0);
@@ -163,13 +165,20 @@ export default function EscenaCierrePage() {
             </div>
           </div>
 
-          {/* Botón Volver al Inicio */}
+          {/* Botón Volver al Inicio (ADR-018: si hay actualización pendiente, se aplica aquí de forma voluntaria al salir) */}
           <button
-            onClick={() => navigate('/')}
+            type="button"
+            onClick={() => {
+              if (updateAvailable) {
+                applyUpdate();
+              } else {
+                navigate('/');
+              }
+            }}
             className="w-full py-3.5 bg-gradient-to-r from-brand-600 to-accent-600 hover:from-brand-500 hover:to-accent-500 text-white font-bold rounded-2xl shadow-lg shadow-brand-500/20 transition-all active:scale-[0.98] text-xs flex items-center justify-center gap-2"
           >
             <Home className="w-4 h-4" />
-            <span>Volver al Inicio</span>
+            <span>{updateAvailable ? 'Actualizar y Salir' : 'Volver al Inicio'}</span>
           </button>
         </div>
       </JornadaLayout>

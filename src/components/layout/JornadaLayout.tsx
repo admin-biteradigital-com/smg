@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, LogOut } from 'lucide-react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { ChevronLeft, LogOut, Sparkles } from 'lucide-react';
 import { SyncIndicator } from '@/components/offline/SyncIndicator';
 import { onSyncStatusChange, getCurrentSyncStatus } from '@/lib/sync';
 import { useAuth } from '@/contexts/AuthContext';
+import { useUpdate } from '@/contexts/UpdateContext';
 import type { SyncStatus } from '@/types';
 
 // ─── JornadaLayout ────────────────────────────────────────────────────────────
@@ -40,9 +41,15 @@ export default function JornadaLayout({
   children,
 }: JornadaLayoutProps) {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, logout } = useAuth();
+  const { updateAvailable } = useUpdate();
   const [syncStatus, setSyncStatus] = useState<SyncStatus>(getCurrentSyncStatus);
   const [pendingCount, setPendingCount] = useState(0);
+
+  // ADR-018: Indicador discreto obligatorio en /jornada/ruta (nunca en venta ni cobro)
+  const isRutaPage = location.pathname === '/jornada/ruta';
+  const showUpdateBadge = updateAvailable && isRutaPage;
 
   useEffect(() => {
     const unsubscribe = onSyncStatusChange((status, pending) => {
@@ -92,7 +99,18 @@ export default function JornadaLayout({
           </div>
         </div>
 
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center gap-2.5 shrink-0">
+          {/* ADR-018: Indicador discreto no bloqueante en /jornada/ruta */}
+          {showUpdateBadge && (
+            <div
+              className="flex items-center gap-1 px-2 py-1 rounded-full bg-violet-500/15 border border-violet-500/30 text-violet-300 text-[10px] font-semibold select-none animate-pulse"
+              title="Hay una actualización lista que se aplicará al finalizar la jornada"
+            >
+              <Sparkles className="w-3 h-3 text-violet-400 shrink-0" />
+              <span className="hidden sm:inline">Actualización lista</span>
+              <span className="sm:hidden">vNueva</span>
+            </div>
+          )}
           <SyncIndicator status={syncStatus} pendingCount={pendingCount} />
           <button
             onClick={logout}
