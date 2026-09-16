@@ -221,12 +221,12 @@ Ver especificación completa en el repo `siglo/docs/api/endpoints/`:
 | `POST /api/v1/payments/checkout` | Sí (cliente) | Checkout.tsx — ver docs/integraciones/pagos.md |
 | `GET /api/v1/payments/:id/status` | Sí (cliente) | /checkout/exito |
 | `GET /api/v1/orders/own` | Sí (cliente) | MisPedidos.tsx |
-| `GET /api/v1/panel` | Sí (admin/vendedor) | Jornada.tsx (Resumen del día) — ADR-017 Lote 1 |
-| `GET /api/v1/clients` | Sí (admin) | Clientes.tsx |
+| `GET /api/v1/panel` | Sí (admin) | `getPanel()` en `api.ts` — ADR-017 Lote 1 |
+| `GET /api/v1/clients` | Sí (admin/vendedor) | `ClientesListPage.tsx` / `EscenaRutaClientes.tsx` |
 | `GET /api/v1/stock` | Sí (admin, deposito) | Stock.tsx |
 | `GET /api/v1/orders?canal=sitio_web` | Sí (admin) | PedidosWeb.tsx |
-| `GET /api/v1/admin/clients/:id/export` | Sí (admin) | Clientes.tsx — botón "Exportar datos" (ADR-010, derecho de acceso) |
-| `POST /api/v1/sales` | Sí (vendedor) | Jornada.tsx |
+| `GET /api/v1/admin/clients/:id/export` | Sí (admin) | `ClientesListPage.tsx` — botón "Exportar datos" (ADR-010, derecho de acceso) |
+| `POST /api/v1/sales` | Sí (vendedor) | `EscenaVenta.tsx` |
 | `POST /api/v1/sync` | Sí | offlineQueue.ts |
 
 ---
