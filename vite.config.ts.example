@@ -12,10 +12,11 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg,webp}'],
         runtimeCaching: [
           {
-            // Catálogo: stale-while-revalidate (5 min)
+            // Catálogo y configuración pública: stale-while-revalidate (5 min)
             urlPattern: ({ url }) =>
               url.pathname.startsWith('/api/v1/catalog') ||
-              url.pathname.startsWith('/api/v1/config'),
+              url.pathname.startsWith('/api/v1/config') ||
+              url.pathname.startsWith('/api/v1/configuracion'),
             handler: 'StaleWhileRevalidate',
             options: {
               cacheName: 'api-public-cache',

@@ -23,7 +23,7 @@ import { SyncIndicator } from '@/components/offline/SyncIndicator';
 import { onSyncStatusChange, getCurrentSyncStatus, runSync } from '@/lib/sync';
 import { getPendingCount } from '@/lib/db';
 import type { SyncStatus, Jornada, Vehiculo, Ruta, ResumenCierre } from '@/types';
-import { api, fetchJornadaActiva, fetchVehiculos, fetchRutas } from '@/lib/api';
+import { fetchJornadaActiva, fetchVehiculos, fetchRutas, getPanel } from '@/lib/api';
 import { ModalAbrirJornada } from '@/components/jornada/ModalAbrirJornada';
 import { ModalCargarStock } from '@/components/jornada/ModalCargarStock';
 import { ModalCierreJornada } from '@/components/jornada/ModalCierreJornada';
@@ -126,12 +126,10 @@ export default function JornadaPage() {
     async function loadDashboard() {
       setLoadingDashboard(true);
       try {
-        const data = await api.get<{ data: { pedidosHoy: number; montoHoy: number } }>(
-          '/api/v1/dashboard'
-        );
-        setDashboardData(data.data);
+        const res = await getPanel();
+        setDashboardData(res.data);
       } catch (err) {
-        console.error('Error al cargar datos del dashboard:', err);
+        console.error('Error al cargar datos del panel:', err);
       } finally {
         setLoadingDashboard(false);
       }

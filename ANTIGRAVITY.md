@@ -207,8 +207,8 @@ Ver especificación completa en el repo `siglo/docs/api/endpoints/`:
 
 | Endpoint | Autenticación | Consumido en |
 |---|---|---|
-| `GET /api/v1/health` | No | Healthcheck |
-| `GET /api/v1/config/public` | No | Navbar, Footer, Home |
+| `GET /api/v1/salud` | No | Healthcheck (`isReachable` en `api.ts`) — ADR-017 Lote 1 |
+| `GET /api/v1/configuracion/publica` | No | Navbar, Footer, Home (Sitio público) — ADR-017 Lote 1 |
 | `GET /api/v1/catalog` | No | Página /catalogo — incluye `precioPublico` |
 | `GET /api/v1/catalog/brands` | No | Chips de filtro en /catalogo |
 | `POST /api/v1/leads` | No | Formulario Home y /contacto |
@@ -221,7 +221,7 @@ Ver especificación completa en el repo `siglo/docs/api/endpoints/`:
 | `POST /api/v1/payments/checkout` | Sí (cliente) | Checkout.tsx — ver docs/integraciones/pagos.md |
 | `GET /api/v1/payments/:id/status` | Sí (cliente) | /checkout/exito |
 | `GET /api/v1/orders/own` | Sí (cliente) | MisPedidos.tsx |
-| `GET /api/v1/dashboard` | Sí (admin) | Dashboard.tsx |
+| `GET /api/v1/panel` | Sí (admin/vendedor) | Jornada.tsx (Resumen del día) — ADR-017 Lote 1 |
 | `GET /api/v1/clients` | Sí (admin) | Clientes.tsx |
 | `GET /api/v1/stock` | Sí (admin, deposito) | Stock.tsx |
 | `GET /api/v1/orders?canal=sitio_web` | Sí (admin) | PedidosWeb.tsx |
@@ -249,12 +249,12 @@ Ver especificación completa en el repo `siglo/docs/api/endpoints/`:
 
 ## Regla Permanente de Validación y Testing
 
-### Prohibición Estricta de Automatización de Navegador contra Staging y Producción
+  ### Prohibición Estricta de Automatización de Navegador contra Staging y Producción
 
-- **NUNCA** intentar autenticarse ni controlar un navegador de forma automatizada contra los entornos de Staging (`https://smg-staging.biteradigital.com`) o Producción (`https://smg.biteradigital.com`).
-- La autenticación basada en Magic Link está diseñada de forma intencional para bloquear accesos no humanos; cualquier intento automatizado fallará y consumirá recursos en bucles inútiles.
-- **Toda validación en navegador real la realiza exclusivamente Zelmar.**
-- La validación por parte del agente debe resolverse exclusivamente mediante:
-  1. Lectura y análisis estático riguroso del código fuente.
-  2. Pruebas unitarias aisladas en Vitest mockeando las APIs del navegador (`navigator.serviceWorker`, `window.location`, `sessionStorage`, etc.).
-  3. Guía de pasos manuales: Si se requiere confirmación en navegador real, redactar una guía concisa de pasos para que Zelmar la ejecute en su entorno.
+  - **NUNCA** intentar autenticarse ni controlar un navegador de forma automatizada contra los entornos de Staging (`https://smg-staging.biteradigital.com`) o Producción (`https://smg.biteradigital.com`).
+  - La autenticación basada en Magic Link está diseñada de forma intencional para bloquear accesos no humanos; cualquier intento automatizado fallará y consumirá recursos en bucles inútiles.
+  - **Toda validación en navegador real la realiza exclusivamente Zelmar.**
+  - La validación por parte del agente debe resolverse exclusivamente mediante:
+    1. Lectura y análisis estático riguroso del código fuente.
+    2. Pruebas unitarias aisladas en Vitest mockeando las APIs del navegador (`navigator.serviceWorker`, `window.location`, `sessionStorage`, etc.).
+    3. Guía de pasos manuales: Si se requiere confirmación en navegador real, redactar una guía concisa de pasos para que Zelmar la ejecute en su entorno.

@@ -230,18 +230,41 @@ export const api = {
   },
 
   /**
-   * Comprueba si el servidor es alcanzable haciendo GET /api/v1/health.
+   * Comprueba si el servidor es alcanzable haciendo GET /api/v1/salud.
    * Útil antes de intentar sincronización.
    */
   async isReachable(): Promise<boolean> {
     try {
-      await request('/api/v1/health', { method: 'GET', timeoutMs: 4_000 });
+      await request('/api/v1/salud', { method: 'GET', timeoutMs: 4_000 });
       return true;
     } catch {
       return false;
     }
   },
 } as const;
+
+// ─── ADR-017 Lote 1: Panel y Configuración Pública ───────────────────────────
+
+export interface PanelResumenData {
+  pedidosHoy: number;
+  montoHoy: number;
+}
+
+/**
+ * Obtiene las métricas del panel de control (pedidos y monto acumulado hoy).
+ * Endpoint ADR-017 Lote 1: GET /api/v1/panel
+ */
+export async function getPanel(): Promise<ApiResponse<PanelResumenData>> {
+  return api.get<ApiResponse<PanelResumenData>>('/api/v1/panel');
+}
+
+/**
+ * Obtiene la configuración pública de la empresa (contacto, WhatsApp, etc.).
+ * Endpoint ADR-017 Lote 1: GET /api/v1/configuracion/publica
+ */
+export async function getConfiguracionPublica<T = Record<string, unknown>>(): Promise<ApiResponse<T>> {
+  return api.get<ApiResponse<T>>('/api/v1/configuracion/publica');
+}
 
 // ─── Catalog helpers ──────────────────────────────────────────────────────────
 
