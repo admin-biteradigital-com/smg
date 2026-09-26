@@ -34,8 +34,8 @@ export interface Producto {
   categoriaId: string;
   unidadMedida: UnidadMedida;
   precioBase: number;       // En CLP (pesos chilenos)
-  precioPublico?: number;   // Precio público e-commerce (GET /api/v1/catalog)
-  precioOferta?: number;    // Precio oferta opcional (GET /api/v1/catalog)
+  precioPublico?: number;   // Precio público e-commerce (GET /api/v1/catalogo)
+  precioOferta?: number;    // Precio oferta opcional (GET /api/v1/catalogo)
   imageUrl?: string;
   marca?: string;
   activo: boolean;

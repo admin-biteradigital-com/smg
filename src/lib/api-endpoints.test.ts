@@ -1,5 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { api, getPanel, getConfiguracionPublica } from '@/lib/api';
+import {
+  api,
+  getPanel,
+  getConfiguracionPublica,
+  getCatalogoPublico,
+  getCatalogoMarcas,
+  getCatalogoProductoById,
+  fetchCatalog,
+} from '@/lib/api';
 
 describe('ADR-017 Lote 1: Endpoints en Español (/salud, /panel, /configuracion/publica)', () => {
   beforeEach(() => {
@@ -71,6 +79,71 @@ describe('ADR-017 Lote 1: Endpoints en Español (/salud, /panel, /configuracion/
 
       expect(getSpy).toHaveBeenCalledWith('/api/v1/configuracion/publica');
       expect(res.data).toEqual(mockConfig.data);
+    });
+  });
+});
+
+describe('ADR-017 Lote 2: Catálogo Público en Español (/catalogo, /catalogo/marcas, /catalogo/:id)', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  describe('getCatalogoPublico() → /api/v1/catalogo', () => {
+    it('debe consultar GET /api/v1/catalogo sin parámetros adicionales', async () => {
+      const mockRes = { data: [{ id: 1, nombre: 'Bebida Cola' }] };
+      const getSpy = vi.spyOn(api, 'get').mockResolvedValueOnce(mockRes as any);
+
+      const res = await getCatalogoPublico();
+
+      expect(getSpy).toHaveBeenCalledWith('/api/v1/catalogo');
+      expect(res).toEqual(mockRes);
+    });
+
+    it('debe serializar parámetros de búsqueda y filtros en query string', async () => {
+      const mockRes = { data: [] };
+      const getSpy = vi.spyOn(api, 'get').mockResolvedValueOnce(mockRes as any);
+
+      await getCatalogoPublico({ marca: 'CCU', q: 'cola', page: 2, pageSize: 20 });
+
+      expect(getSpy).toHaveBeenCalledWith('/api/v1/catalogo?marca=CCU&q=cola&page=2&pageSize=20');
+    });
+
+    it('fetchCatalog() debe delegar a /api/v1/catalogo manteniendo compatibilidad', async () => {
+      const mockRes = { data: [{ id: 2, nombre: 'Agua Mineral' }] };
+      const getSpy = vi.spyOn(api, 'get').mockResolvedValueOnce(mockRes as any);
+
+      const res = await fetchCatalog();
+
+      expect(getSpy).toHaveBeenCalledWith('/api/v1/catalogo');
+      expect(res).toEqual(mockRes);
+    });
+  });
+
+  describe('getCatalogoMarcas() → /api/v1/catalogo/marcas', () => {
+    it('debe consultar GET /api/v1/catalogo/marcas y retornar arreglo de marcas', async () => {
+      const mockMarcas = ['Coca-Cola', 'Pepsi', 'Vital'];
+      const getSpy = vi.spyOn(api, 'get').mockResolvedValueOnce(mockMarcas as any);
+
+      const res = await getCatalogoMarcas();
+
+      expect(getSpy).toHaveBeenCalledWith('/api/v1/catalogo/marcas');
+      expect(res).toEqual(mockMarcas);
+    });
+  });
+
+  describe('getCatalogoProductoById() → /api/v1/catalogo/:id', () => {
+    it('debe consultar GET /api/v1/catalogo/:id con el ID del producto', async () => {
+      const mockProducto = { data: { id: 42, nombre: 'Jugo Naranja 1L' } };
+      const getSpy = vi.spyOn(api, 'get').mockResolvedValueOnce(mockProducto as any);
+
+      const res = await getCatalogoProductoById(42);
+
+      expect(getSpy).toHaveBeenCalledWith('/api/v1/catalogo/42');
+      expect(res).toEqual(mockProducto);
     });
   });
 });

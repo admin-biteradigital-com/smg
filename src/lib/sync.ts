@@ -685,7 +685,7 @@ export async function syncCatalog(force = false): Promise<void> {
 
     // Obtener marcas (endpoint separado, no bloquea el sync si falla)
     try {
-      const brandsData = await api.get<string[]>('/api/v1/catalog/brands');
+      const brandsData = await api.get<string[]>('/api/v1/catalogo/marcas');
       localStorage.setItem('siglo_brands', JSON.stringify(brandsData));
     } catch (e) {
       console.warn('[Sync] No se pudieron obtener las marcas:', e);

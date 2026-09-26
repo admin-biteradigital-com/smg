@@ -266,21 +266,56 @@ export async function getConfiguracionPublica<T = Record<string, unknown>>(): Pr
   return api.get<ApiResponse<T>>('/api/v1/configuracion/publica');
 }
 
-// ─── Catalog helpers ──────────────────────────────────────────────────────────
+// ─── ADR-017 Lote 2: Catálogo Público ──────────────────────────────────────────
 
-/**
- * Obtiene el catálogo completo del servidor.
- * Retorna la respuesta paginada de productos.
- */
-export async function fetchCatalog<T>(): Promise<ApiResponse<T>> {
-  return api.get<ApiResponse<T>>('/api/v1/catalog/products');
+export interface CatalogoFilters {
+  marca?: string;
+  q?: string;
+  page?: number;
+  pageSize?: number;
 }
 
 /**
- * Obtiene los lotes de stock del servidor.
+ * Obtiene el catálogo de productos públicos con filtros y paginación opcionales.
+ * Endpoint ADR-017 Lote 2: GET /api/v1/catalogo
  */
-export async function fetchLotes<T>(): Promise<ApiResponse<T>> {
-  return api.get<ApiResponse<T>>('/api/v1/catalog/lots');
+export async function getCatalogoPublico<T = unknown>(
+  params?: CatalogoFilters
+): Promise<ApiResponse<T>> {
+  const searchParams = new URLSearchParams();
+  if (params?.marca) searchParams.set('marca', params.marca);
+  if (params?.q) searchParams.set('q', params.q);
+  if (params?.page) searchParams.set('page', String(params.page));
+  if (params?.pageSize) searchParams.set('pageSize', String(params.pageSize));
+
+  const query = searchParams.toString() ? `?${searchParams.toString()}` : '';
+  return api.get<ApiResponse<T>>(`/api/v1/catalogo${query}`);
+}
+
+/**
+ * Obtiene el listado de marcas disponibles en el catálogo público.
+ * Endpoint ADR-017 Lote 2: GET /api/v1/catalogo/marcas
+ */
+export async function getCatalogoMarcas(): Promise<string[]> {
+  return api.get<string[]>('/api/v1/catalogo/marcas');
+}
+
+/**
+ * Obtiene el detalle de un producto del catálogo público por ID.
+ * Endpoint ADR-017 Lote 2: GET /api/v1/catalogo/:id
+ */
+export async function getCatalogoProductoById<T = unknown>(
+  id: number | string
+): Promise<ApiResponse<T>> {
+  return api.get<ApiResponse<T>>(`/api/v1/catalogo/${id}`);
+}
+
+/**
+ * Obtiene el catálogo completo del servidor (compatibilidad).
+ * Retorna la respuesta paginada de productos.
+ */
+export async function fetchCatalog<T>(params?: CatalogoFilters): Promise<ApiResponse<T>> {
+  return getCatalogoPublico<T>(params);
 }
 
 /**

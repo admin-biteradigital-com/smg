@@ -42,6 +42,7 @@ export default defineConfig({
             // Catálogo y configuración pública: stale-while-revalidate (4h)
             urlPattern: ({ url }) =>
               url.pathname.startsWith('/api/v1/catalog') ||
+              url.pathname.startsWith('/api/v1/catalogo') ||
               url.pathname.startsWith('/api/v1/config') ||
               url.pathname.startsWith('/api/v1/configuracion'),
             handler: 'StaleWhileRevalidate',
