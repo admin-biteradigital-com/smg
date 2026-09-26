@@ -11,10 +11,12 @@ import {
   LogOut,
   ChevronDown,
   ChevronUp,
+  AlertTriangle,
 } from 'lucide-react';
 import { useJornada } from '@/contexts/JornadaContext';
 import JornadaLayout from '@/components/layout/JornadaLayout';
 import { useClientes, type EnrichedCliente } from '@/hooks/useClientes';
+import { useClientesDiscrepancia } from '@/hooks/useClientesDiscrepancia';
 import { db } from '@/lib/db';
 import { runSync } from '@/lib/sync';
 import { getClientesSaldosPendientes } from '@/lib/api';
@@ -39,6 +41,7 @@ export default function EscenaRutaClientesPage() {
   const navigate = useNavigate();
   const { jornada, loading: jornadaLoading } = useJornada();
   const { clientes, isLoading: loadingClientes, recargarClientes } = useClientes();
+  const discrepancia = useClientesDiscrepancia();
 
   const [busqueda, setBusqueda] = useState('');
   const [sucursalesMap, setSucursalesMap] = useState<Record<string, Sucursal[]>>({});
@@ -219,6 +222,21 @@ export default function EscenaRutaClientesPage() {
             )}
           </div>
         </div>
+
+        {/* Aviso no bloqueante de discrepancia de clientes */}
+        {discrepancia && (
+          <div className="mx-4 mt-3 -mb-1 p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-2.5 text-xs text-amber-200">
+            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+            <div className="space-y-0.5 min-w-0">
+              <p className="font-semibold text-amber-300 text-[11px]">
+                Aviso de sincronización de clientes
+              </p>
+              <p className="text-[11px] text-zinc-400 leading-relaxed">
+                El servidor reporta 0 clientes activos, pero se conservan {discrepancia.localCount} en la memoria de este dispositivo. Notifica a administración si la lista no coincide.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Lista de clientes */}
         <div className="flex-1 px-4 py-4 space-y-2.5">

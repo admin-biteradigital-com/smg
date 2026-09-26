@@ -242,6 +242,18 @@ export async function bulkUpsertSucursales(sucursales: Sucursal[]): Promise<void
   await db.sucursales.bulkPut(sucursales);
 }
 
+/**
+ * Purga exclusivamente las tablas de clientes y sucursales en Dexie.
+ * Garantiza aislamiento absoluto: ninguna otra tabla (productos, lotes,
+ * stock, vehículos, rutas, jornadas, offline_queue) es alterada.
+ */
+export async function purgeClientesAndSucursalesOnly(): Promise<void> {
+  await db.transaction('rw', [db.clientes, db.sucursales], async () => {
+    await db.clientes.clear();
+    await db.sucursales.clear();
+  });
+}
+
 export async function bulkUpsertPedidos(pedidos: Pedido[]): Promise<void> {
   await db.pedidos.bulkPut(pedidos);
 }

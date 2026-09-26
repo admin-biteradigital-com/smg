@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ChevronLeft, LogOut, Sparkles } from 'lucide-react';
+import { ChevronLeft, LogOut, Sparkles, AlertTriangle } from 'lucide-react';
 import { SyncIndicator } from '@/components/offline/SyncIndicator';
 import { onSyncStatusChange, getCurrentSyncStatus } from '@/lib/sync';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUpdate } from '@/contexts/UpdateContext';
+import { useClientesDiscrepancia } from '@/hooks/useClientesDiscrepancia';
 import type { SyncStatus } from '@/types';
 
 // ─── JornadaLayout ────────────────────────────────────────────────────────────
@@ -44,6 +45,7 @@ export default function JornadaLayout({
   const location = useLocation();
   const { user, logout } = useAuth();
   const { updateAvailable } = useUpdate();
+  const clientesDiscrepancia = useClientesDiscrepancia();
   const [syncStatus, setSyncStatus] = useState<SyncStatus>(getCurrentSyncStatus);
   const [pendingCount, setPendingCount] = useState(0);
 
@@ -100,6 +102,17 @@ export default function JornadaLayout({
         </div>
 
         <div className="flex items-center gap-2.5 shrink-0">
+          {/* Indicador pasivo discreto de discrepancia de clientes en /jornada/ruta */}
+          {clientesDiscrepancia && isRutaPage && (
+            <div
+              className="flex items-center gap-1 px-2 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[10px] font-semibold select-none"
+              title={`El servidor reporta 0 clientes pero hay ${clientesDiscrepancia.localCount} en caché local. Los datos pueden estar desactualizados.`}
+            >
+              <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0" />
+              <span className="hidden sm:inline">Clientes desactualizados</span>
+              <span className="sm:hidden">Aviso clientes</span>
+            </div>
+          )}
           {/* ADR-018: Indicador discreto no bloqueante en /jornada/ruta */}
           {showUpdateBadge && (
             <div

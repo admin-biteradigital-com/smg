@@ -13,8 +13,13 @@ import {
   CreditCard,
   Building2,
   CheckCircle2,
+  AlertTriangle,
+  Trash2,
 } from 'lucide-react';
 import { getClientesAdmin, getClientesSaldosPendientes, ApiRequestError } from '@/lib/api';
+import { db } from '@/lib/db';
+import { purgeClientesCacheLocal, evaluateClientesDiscrepancy } from '@/lib/sync';
+import { useClientesDiscrepancia } from '@/hooks/useClientesDiscrepancia';
 import { formatRut } from '@/lib/rut';
 import type { ClienteAdminItem, SegmentoCliente } from '@/types';
 
@@ -47,6 +52,9 @@ export default function ClientesListPage() {
   const [saldosMap, setSaldosMap] = useState<Record<number, number>>({});
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [purging, setPurging] = useState(false);
+
+  const discrepancia = useClientesDiscrepancia();
 
   // Filtros
   const [busqueda, setBusqueda] = useState('');
@@ -83,6 +91,16 @@ export default function ClientesListPage() {
       }
       setSaldosMap(map);
       setClientes(listaClientes);
+
+      // Si no hay filtro de búsqueda activo, verificar discrepancia con Dexie
+      if (!busqueda.trim()) {
+        try {
+          const localCount = await db.clientes.count();
+          evaluateClientesDiscrepancy(localCount, listaClientes.length);
+        } catch {
+          // Si IndexedDB no está disponible en este contexto, no interrumpir el flujo
+        }
+      }
     } catch (err: unknown) {
       console.error('[ClientesListPage] Error al cargar clientes:', err);
       const msg =
@@ -105,6 +123,17 @@ export default function ClientesListPage() {
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     loadData();
+  };
+
+  const handlePurgeCache = async () => {
+    setPurging(true);
+    try {
+      await purgeClientesCacheLocal();
+    } catch (err) {
+      console.error('[ClientesListPage] Error al purgar caché local:', err);
+    } finally {
+      setPurging(false);
+    }
   };
 
   // Clientes con saldo combinado
@@ -193,6 +222,34 @@ export default function ClientesListPage() {
             })}
           </div>
         </div>
+
+        {/* Banner de Discrepancia y Acción de Purga Local */}
+        {discrepancia && (
+          <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-200 space-y-3">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+              <div className="flex-1 space-y-1">
+                <p className="text-xs font-bold text-amber-300">
+                  Discrepancia en almacenamiento local
+                </p>
+                <p className="text-xs text-zinc-300 leading-relaxed">
+                  El servidor no tiene clientes registrados ({discrepancia.serverCount}), pero este navegador conserva {discrepancia.localCount} clientes en la memoria caché offline de Modo Jornada.
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={handlePurgeCache}
+                disabled={purging}
+                className="px-3.5 py-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95 flex items-center gap-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                {purging ? 'Limpiando...' : 'Limpiar caché local de clientes'}
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Listado / Estados */}
         {loading ? (

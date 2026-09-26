@@ -10,6 +10,7 @@ import {
   bulkUpsertVehiculos,
   bulkUpsertRutas,
   bulkUpsertStockDeposito,
+  purgeClientesAndSucursalesOnly,
 } from '@/lib/db';
 import type {
   Cliente,
@@ -61,6 +62,67 @@ async function broadcastStatus(status: SyncStatus): Promise<void> {
 export function getCurrentSyncStatus(): SyncStatus {
   return _currentStatus;
 }
+
+// ─── Clientes Sync Discrepancy Detection ─────────────────────────────────────
+
+export const CLIENTES_SYNC_DISCREPANCIA_KEY = 'siglo_clientes_sync_discrepancia';
+
+export interface ClientesDiscrepanciaInfo {
+  localCount: number;
+  serverCount: number;
+  timestamp: number;
+}
+
+export function getClientesSyncDiscrepancia(): ClientesDiscrepanciaInfo | null {
+  if (typeof localStorage === 'undefined') return null;
+  const raw = localStorage.getItem(CLIENTES_SYNC_DISCREPANCIA_KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+export function setClientesSyncDiscrepancia(info: ClientesDiscrepanciaInfo | null): void {
+  if (typeof localStorage === 'undefined') return;
+  if (info) {
+    localStorage.setItem(CLIENTES_SYNC_DISCREPANCIA_KEY, JSON.stringify(info));
+  } else {
+    localStorage.removeItem(CLIENTES_SYNC_DISCREPANCIA_KEY);
+  }
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('siglo-clientes-discrepancia-change', { detail: info }));
+  }
+}
+
+/**
+ * Evalúa la discrepancia entre el conteo local de clientes en Dexie y el recibido del servidor.
+ * Si local > 0 y server === 0: registra la discrepancia para alertar en UI sin borrar datos.
+ * En cualquier otro caso: limpia la discrepancia.
+ */
+export function evaluateClientesDiscrepancy(localCount: number, serverCount: number): ClientesDiscrepanciaInfo | null {
+  if (localCount > 0 && serverCount === 0) {
+    const info: ClientesDiscrepanciaInfo = {
+      localCount,
+      serverCount: 0,
+      timestamp: Date.now(),
+    };
+    setClientesSyncDiscrepancia(info);
+    return info;
+  }
+  setClientesSyncDiscrepancia(null);
+  return null;
+}
+
+/**
+ * Limpia la caché local de clientes y sucursales de forma segura y remueve la discrepancia.
+ */
+export async function purgeClientesCacheLocal(): Promise<void> {
+  await purgeClientesAndSucursalesOnly();
+  setClientesSyncDiscrepancia(null);
+}
+
 
 // ─── Online / Offline Detection ───────────────────────────────────────────────
 
@@ -566,6 +628,11 @@ export async function pullMasterData(): Promise<void> {
       sucursales.push(mapSucursal(s, String(c.id), generatedAt));
     }
   }
+
+  // ── Detección de discrepancia N -> 0 en clientes ──────────────
+  const localClientesCount = await db.clientes.count();
+  const serverClientesCount = clientes.length;
+  evaluateClientesDiscrepancy(localClientesCount, serverClientesCount);
 
   // ── Mapear vehículos, rutas y stock de depósito (ADR-015) ─────
   const vehiculos = (vehiculosRes.data ?? []).map(mapVehiculo);
