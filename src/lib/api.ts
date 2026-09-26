@@ -296,8 +296,8 @@ export async function getCatalogoPublico<T = unknown>(
  * Obtiene el listado de marcas disponibles en el catálogo público.
  * Endpoint ADR-017 Lote 2: GET /api/v1/catalogo/marcas
  */
-export async function getCatalogoMarcas(): Promise<string[]> {
-  return api.get<string[]>('/api/v1/catalogo/marcas');
+export async function getCatalogoMarcas<T = string[]>(): Promise<T> {
+  return api.get<T>('/api/v1/catalogo/marcas');
 }
 
 /**

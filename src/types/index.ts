@@ -43,6 +43,28 @@ export interface Producto {
   updatedAt: string;
 }
 
+// ── Catálogo Público (GET /api/v1/catalogo — ADR-017 / Modo Gestión) ──────────
+
+export interface CatalogProductItem {
+  id: number;
+  nombre: string;
+  descripcionWeb: string | null;
+  marca: string | null;
+  marcaSlug: string | null;
+  imagenUrl: string | null;
+  unidadVenta: string;
+  precioPublico: number | null;
+  precioOferta: number | null;
+  categoriaWeb: string | null;
+  activo: boolean;
+}
+
+export interface CatalogMarcaItem {
+  nombre: string;
+  slug: string;
+  totalProductos?: number;
+}
+
 export interface Precio {
   id: string;
   productoId: string;

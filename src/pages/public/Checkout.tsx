@@ -174,10 +174,10 @@ export default function CheckoutPage() {
               )}
 
               <button
-                onClick={() => navigate('/catalogo')}
+                onClick={() => navigate('/')}
                 className="w-full py-3.5 bg-gradient-to-r from-brand-600 to-accent-600 hover:from-brand-500 hover:to-accent-500 font-bold rounded-2xl transition-all shadow-lg active:scale-[0.98]"
               >
-                Volver al Catálogo
+                Volver al Inicio
               </button>
             </>
           ) : (
@@ -202,10 +202,10 @@ export default function CheckoutPage() {
                   Reintentar Pago
                 </button>
                 <button
-                  onClick={() => navigate('/catalogo')}
+                  onClick={() => navigate('/')}
                   className="flex-1 py-3.5 bg-brand-600 hover:bg-brand-500 font-bold text-sm rounded-2xl transition-all"
                 >
-                  Ir al Catálogo
+                  Ir al Inicio
                 </button>
               </div>
             </>

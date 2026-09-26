@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Building2, DollarSign, ChevronRight, ChevronLeft, AlertCircle, Users, Truck, MapPin, Package, UserCheck, Store } from 'lucide-react';
+import { Building2, DollarSign, ChevronRight, ChevronLeft, AlertCircle, Users, Truck, MapPin, Package, UserCheck, Store, ShoppingBag } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { getEmpresaPerfil } from '@/lib/api';
 import type { EmpresaPerfil } from '@/types';
@@ -110,6 +110,27 @@ export default function GestionHomePage() {
               <p className="text-base font-bold text-zinc-100">Productos</p>
               <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
                 Catálogo de productos y precios
+              </p>
+            </div>
+
+            <ChevronRight className="w-5 h-5 text-zinc-600 group-hover:text-zinc-300 transition-colors shrink-0" />
+          </button>
+        )}
+
+        {/* Card: Catálogo (Solo Admin) */}
+        {esAdmin && (
+          <button
+            onClick={() => navigate('/gestion/catalogo')}
+            className="w-full p-5 bg-zinc-900/70 border border-zinc-800 hover:border-zinc-700 rounded-3xl flex items-center gap-4 transition-all active:scale-[0.98] group text-left shadow-lg"
+          >
+            <div className="p-3.5 bg-zinc-800/80 border border-zinc-700/60 text-teal-400 rounded-2xl shrink-0 group-hover:scale-110 transition-transform">
+              <ShoppingBag className="w-7 h-7" />
+            </div>
+
+            <div className="flex-1 min-w-0">
+              <p className="text-base font-bold text-zinc-100">Catálogo</p>
+              <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
+                Vista previa de productos y precios al público
               </p>
             </div>
 

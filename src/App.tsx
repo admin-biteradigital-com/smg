@@ -24,9 +24,8 @@ import LoginPage from '@/pages/auth/Login';
 import AuthVerifyPage from '@/pages/auth/AuthVerify';
 import ModoSelectorPage from '@/pages/ModoSelector';
 
-// ── App Shell / Catálogo (Eager) ──────────────────────────────────────────────
-import AppShell from '@/pages/app/AppShell';
-import CatalogoPage from '@/pages/app/Catalogo';
+// ── Artefactos Aislados (pre-ADR-012, no borrar archivos físicos aún) ─────────
+// AppShell y CatalogoPage fueron desconectados del router.
 
 // ── Grupo Lazy: Checkout ──────────────────────────────────────────────────────
 const CheckoutPage = lazy(() => import('@/pages/public/Checkout'));
@@ -37,6 +36,7 @@ const EmpresaPage = lazy(() => import('@/pages/gestion/EmpresaPage'));
 const CuentasCorrientesPage = lazy(() => import('@/pages/gestion/cuentas/CuentasCorrientesPage'));
 const ProductosListPage = lazy(() => import('@/pages/gestion/productos/ProductosListPage'));
 const ProductoFormPage = lazy(() => import('@/pages/gestion/productos/ProductoFormPage'));
+const CatalogoGestionPage = lazy(() => import('@/pages/gestion/catalogo/CatalogoGestionPage'));
 const EmpleadosListPage = lazy(() => import('@/pages/gestion/empleados/EmpleadosListPage'));
 const EmpleadoFormPage = lazy(() => import('@/pages/gestion/empleados/EmpleadoFormPage'));
 const VehiculosListPage = lazy(() => import('@/pages/gestion/vehiculos/VehiculosListPage'));
@@ -192,6 +192,9 @@ export default function App() {
             <Route path="/gestion/proveedores" element={<ProveedoresListPage />} />
             <Route path="/gestion/proveedores/nuevo" element={<ProveedorFormPage />} />
             <Route path="/gestion/proveedores/:id/editar" element={<ProveedorFormPage />} />
+
+            {/* Catálogo Público */}
+            <Route path="/gestion/catalogo" element={<CatalogoGestionPage />} />
           </Route>
 
           {/* ── ADR-012: Modo Jornada (flujo secuencial con JornadaProvider compartido) ── */}
@@ -215,17 +218,8 @@ export default function App() {
             <Route path="/jornada/cierre" element={<EscenaCierrePage />} />
           </Route>
 
-          {/* ── Rutas existentes dentro del AppShell (sin regresión) ── */}
-          <Route
-            element={
-              <ProtectedRoute>
-                <AppShell />
-              </ProtectedRoute>
-            }
-          >
-            {/* Catálogo */}
-            <Route path="catalogo" element={<CatalogoPage />} />
-          </Route>
+          {/* ── Artefacto huérfano aislado pre-ADR-012: /catalogo desconectado del router ── */}
+          {/* El archivo físico src/pages/app/Catalogo.tsx se conserva aislado sin montar */}
 
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/login" replace />} />

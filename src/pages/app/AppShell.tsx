@@ -68,7 +68,7 @@ export default function AppShell() {
           </NavLink>
 
           <NavLink
-            to="/catalogo"
+            to="/gestion/catalogo"
             className={({ isActive }) =>
               `flex flex-col items-center justify-center py-1.5 w-20 text-[10px] font-medium transition-all ${
                 isActive ? 'text-brand-400 scale-105' : 'text-zinc-500 hover:text-zinc-350'
