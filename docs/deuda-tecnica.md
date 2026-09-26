@@ -6,21 +6,33 @@ Este documento registra la deuda técnica conocida en dependencias, el análisis
 
 ## 1. Vulnerabilidades en Dependencias de Desarrollo y Producción (`npm audit`)
 
-- **Fecha de registro:** 31 de agosto de 2026
-- **Estado:** Aceptado / Mitigado por arquitectura
-- **Severidad reportada por npm audit:** 9 vulnerabilidades (6 moderate, 1 high, 2 critical)
-- **Resultado de `npm audit fix` (sin `--force`):** 0 resueltas (todas requieren cambios de versión mayor / breaking changes).
+- **Fecha de registro original:** 31 de agosto de 2026
+- **Fecha de actualización:** 26 de septiembre de 2026
+- **Estado:** Actualización quirúrgica aplicada. Vulnerabilidades High y Critical reducidas a 0. Vulnerabilidades Moderate restantes aceptadas y mitigadas por arquitectura.
+- **Severidad reportada por npm audit:** 5 vulnerabilidades (5 moderate, 0 high, 0 critical)
+- **Resultado de `npm audit --audit-level=high`:** **0 vulnerabilidades (Exit code 0 — Pasa en CI)**.
 
 ---
 
-### Detalle de Paquetes y Análisis Advisory por Advisory
+### Detalle de la Actualización Quirúrgica (Septiembre 2026)
+
+Se aplicó una actualización acotada sin saltos disruptivos a Vite 8 ni a React Router 7:
+1. `npm audit fix` (sin `--force`): Actualizó `sharp` (0.35.4, resolviendo vulnerabilidades críticas/altas en `libheif`), `wrangler` (4.141.0), `browserslist` (4.29.1, resolviendo 2 avisos High) y `baseline-browser-mapping` (2.11.26).
+2. `vite` (`^5.4.0` → `^6.4.3`): Resolvió la vulnerabilidad High `GHSA-fx2h-pf6j-xcff` (bypass de `server.fs.deny` en Windows) y actualizó `esbuild` a `0.25.0` (resolviendo `GHSA-67mh-4wv8-2f99`).
+3. `vite-plugin-pwa` (`^0.20.0` → `^0.21.1`): Compatible con Vite 6, conservando 100% la configuración de Service Worker/Workbox de ADR-018 sin cambios de sintaxis.
+4. `vitest` y `@vitest/coverage-v8` (`^2.0.0` → `^3.2.6`): Resolvió la vulnerabilidad Critical `GHSA-5xrq-8626-4rwp` (lectura de archivos en UI server). Compatible con `better-auth` (`^2.0.0 || ^3.0.0 || ^4.0.0`).
+5. `@vitejs/plugin-react` se mantuvo en `^4.3.0` (compatible con Vite 6) y `react-router-dom` se mantuvo en `^6.26.0`.
+
+---
+
+### Detalle de Paquetes y Análisis de Vulnerabilidades Restantes (Todas Moderate)
 
 #### A. Dependencias de Producción (`react-router` / `react-router-dom`)
 
 | Paquete | Versión actual | Severidad | Advisory / CVE | Título / Vector | Análisis contra SMG | Riesgo Real en Producción |
 |---|---|---|---|---|---|---|
-| `react-router` / `react-router-dom` | `^6.28.0` | Moderate | [GHSA-337j-9hxr-rhxg](https://github.com/advisories/GHSA-337j-9hxr-rhxg) | *Arbitrary Constructor Injection via `deserializeErrors()` en SSR Hydration* (CWE-470) | **No Aplica.** SMG es una SPA/PWA estática alojada en Cloudflare Pages. No utiliza Server-Side Rendering (SSR), no ejecuta Node.js en servidor ni hidrata errores con `deserializeErrors()`. El enrutamiento es 100% cliente declarativo (ADR-012). | **Nulo (0)** |
-| `react-router` / `react-router-dom` | `^6.28.0` | Moderate | [GHSA-wrjc-x8rr-h8h6](https://github.com/advisories/GHSA-wrjc-x8rr-h8h6) | *Open redirect via backslash en `<Link>` y `useNavigate`* (CWE-601) | **No Aplica / No Explotable.** Todas las llamadas a `navigate()` y `<Link to={...}>` en la app utilizan rutas que comienzan con prefijo raíz fijo del sistema (ej. `'/jornada/ruta'`, `'/catalogo'`, `'/jornada/venta/${clienteId}'`). Las interpolaciones corresponden exclusivamente a IDs internos de entidades (`clienteId`, `veh.id`, `ventaId`). Los query parameters existentes (ej. `?sucursalId=...` en `EscenaRutaClientes` y `EscenaCobroSinVenta`) se transmiten como parámetros de consulta dentro de rutas internas fijas (ej. `/jornada/venta/${clienteId}?sucursalId=${sucursalId}`), nunca como el destino base de navegación ni como URLs externas. | **Nulo (0)** |
+| `react-router` / `react-router-dom` | `^6.26.0` | Moderate | [GHSA-337j-9hxr-rhxg](https://github.com/advisories/GHSA-337j-9hxr-rhxg) | *Arbitrary Constructor Injection via `deserializeErrors()` en SSR Hydration* (CWE-470) | **No Aplica.** SMG es una SPA/PWA estática alojada en Cloudflare Pages. No utiliza Server-Side Rendering (SSR), no ejecuta Node.js en servidor ni hidrata errores con `deserializeErrors()`. El enrutamiento es 100% cliente declarativo (ADR-012). | **Nulo (0)** |
+| `react-router` / `react-router-dom` | `^6.26.0` | Moderate | [GHSA-wrjc-x8rr-h8h6](https://github.com/advisories/GHSA-wrjc-x8rr-h8h6) | *Open redirect via backslash en `<Link>` y `useNavigate`* (CWE-601) | **No Aplica / No Explotable.** Todas las llamadas a `navigate()` y `<Link to={...}>` en la app utilizan rutas que comienzan con prefijo raíz fijo del sistema (ej. `'/jornada/ruta'`, `'/catalogo'`, `'/jornada/venta/${clienteId}'`). Las interpolaciones corresponden exclusivamente a IDs internos de entidades (`clienteId`, `veh.id`, `ventaId`). Los query parameters existentes se transmiten dentro de rutas internas fijas, nunca como destino base ni URLs externas. | **Nulo (0)** |
 
 ---
 
@@ -28,32 +40,24 @@ Este documento registra la deuda técnica conocida en dependencias, el análisis
 
 | Paquete | Tipo | Severidad | Advisory / CVE | Título / Vector | Modo de uso en SMG | Riesgo Real en Producción |
 |---|---|---|---|---|---|---|
-| `esbuild` `<=0.24.2` | devDependency transitiva | Moderate | [GHSA-67mh-4wv8-2f99](https://github.com/advisories/GHSA-67mh-4wv8-2f99) | *Peticiones no autorizadas al servidor de desarrollo local* (CWE-346) | Bundler de desarrollo local. No corre ningún servidor esbuild en producción (Cloudflare Pages sirve archivos estáticos precompilados). | **Nulo (0)** |
-| `vite` `<=6.4.2` | devDependency directa | High / Moderate | [GHSA-fx2h-pf6j-xcff](https://github.com/advisories/GHSA-fx2h-pf6j-xcff)<br>[GHSA-4w7w-66w2-5vf9](https://github.com/advisories/GHSA-4w7w-66w2-5vf9)<br>[GHSA-v6wh-96g9-6wx3](https://github.com/advisories/GHSA-v6wh-96g9-6wx3) | *`server.fs.deny` bypass en Windows*, *Path traversal en `.map`*, *NTLMv2 hash disclosure en `launch-editor`* (CWE-22, CWE-73, CWE-522) | Build tool (`npm run build`) y dev server local (`localhost`). No existe servidor Vite en producción. | **Nulo (0)** |
-| `vitest` `<=3.2.5` | devDependency directa | Critical | [GHSA-5xrq-8626-4rwp](https://github.com/advisories/GHSA-5xrq-8626-4rwp) | *Lectura arbitraria de archivos cuando el servidor Vitest UI está activo* (CWE-22, CWE-862) | Test runner. Se ejecuta exclusivamente en modo CLI headless (`vitest run`). El servidor interactivo `--ui` no se inicia ni se expone a internet. | **Nulo (0)** |
-| `@vitest/coverage-v8` `<=3.2.5` | devDependency directa | Critical | Dependencia de `vitest` | Herramienta de cobertura de tests. | No corre en producción. | **Nulo (0)** |
-| `@vitest/mocker` `<=3.0.0-beta.4` | devDependency transitiva | Moderate | Dependencia de `vite` | Mocking interno de tests. | No corre en producción. | **Nulo (0)** |
-| `vite-node` `<=2.2.0-beta.2` | devDependency transitiva | Moderate | Dependencia de `vite` | Ejecutor de tests en Node. | No corre en producción. | **Nulo (0)** |
-| `vite-plugin-pwa` `0.21.0` | devDependency directa | Moderate | Dependencia de `vite` | Plugin de generación de Service Worker en build time. | No corre en producción como servidor. | **Nulo (0)** |
+| `@vitest/mocker` / `vitest` / `@vitest/coverage-v8` | devDependency directa/transitiva | Moderate | [GHSA-82fw-gwwq-j7x9](https://github.com/advisories/GHSA-82fw-gwwq-j7x9) | *Vitest: Path Traversal / Arbitrary File Read via @vitest/mocker Redirect Mock* (CWE-22) | Test runner y mocking interno. Se ejecuta exclusivamente en modo CLI headless (`vitest run`). No corre en servidor ni en producción. | **Nulo (0)** |
 
 ---
 
 ## 2. Comportamiento en Pipeline de CI/CD
 
-- **Archivo:** `.github/workflows/deploy.yml` (línea 36)
+- **Archivo:** `.github/workflows/deploy.yml` (línea 35)
 - **Configuración:**
   ```yaml
   - name: Auditoría de dependencias
     run: npm audit --audit-level=high
     continue-on-error: true
   ```
-- **Confirmación:** El paso de auditoría cuenta explícitamente con `continue-on-error: true`. Emite advertencias en el log de calidad pero **no bloquea el pipeline de CI/CD**, permitiendo que los jobs subsiguientes de Build y Deploy a Staging completen exitosamente.
+- **Confirmación:** Con la eliminación de todas las vulnerabilidades High y Critical, `npm audit --audit-level=high` finaliza con código de salida **0 (exitoso)**, pasando limpiamente sin advertencias en el pipeline de CI/CD.
 
 ---
 
-## 3. Justificación de Postergación y Plan de Resolución
+## 3. Justificación de Mantenimiento de React Router v6
 
-1. **Riesgo Operativo Nulo:** Ninguna de las 9 vulnerabilidades es explotable en la arquitectura de SMG (PWA estática sin SSR en Cloudflare Pages, rutas internas fijas, dev tools aisladas a build/test CLI).
-2. **Impacto de `--force`:** Resolver estas vulnerabilidades exige actualizar `react-router-dom` a v7 (cambio de paradigma y API) y `vite`/`vitest` a versiones mayores con potenciales incompatibilidades con plugins de PWA y toolchain de Node.
-3. **Plan de Resolución:**
-   - Programar una sesión técnica dedicada a la migración planificada a `react-router-dom@7.x` y `vite@6.x+`/`vitest@4.x` cuando se planifique la siguiente actualización de infraestructura frontend.
+1. **Riesgo Operativo Nulo:** Ninguna de las vulnerabilidades Moderate restantes es explotable en la arquitectura de SMG (PWA estática sin SSR en Cloudflare Pages, rutas internas fijas, dev tools aisladas a CLI headless).
+2. **Impacto de migrar a React Router v7:** Subir a `react-router-dom@7.x` representa un cambio mayor de framework (fusión con Remix, cambios de APIs, tipos y convención de rutas) que introduce alto riesgo de regresión en flujos operativos de campo. Se mantiene planificado para una sesión técnica dedicada de refactorización cuando el proyecto lo requiera.
