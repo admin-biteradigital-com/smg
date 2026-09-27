@@ -87,7 +87,7 @@ describe('ADR-015 / ADR-018: Regresión Offline-First de Modo Jornada', () => {
     const operacionVenta: OfflineQueueItem = {
       ulid: ventaUlid,
       type: 'CREATE_PEDIDO',
-      endpoint: '/api/v1/orders',
+      endpoint: '/api/v1/pedidos',
       method: 'POST',
       payload: {
         idJornada: jornadaId,
@@ -113,7 +113,7 @@ describe('ADR-015 / ADR-018: Regresión Offline-First de Modo Jornada', () => {
     const operacionCobro: OfflineQueueItem = {
       ulid: cobroUlid,
       type: 'CREATE_COBRO',
-      endpoint: '/api/v1/payments',
+      endpoint: '/api/v1/cobros',
       method: 'POST',
       payload: {
         idJornada: jornadaId,

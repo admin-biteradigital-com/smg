@@ -92,7 +92,7 @@ export default function EscenaCobroPage() {
         throw new NetworkError('Sin conexión a internet');
       }
 
-      await api.post<PaymentResponse>('/api/v1/sales/payments', paymentPayload);
+      await api.post<PaymentResponse>('/api/v1/cobros', paymentPayload);
       setCobroExitoso(true);
     } catch (err: unknown) {
       if (err instanceof ApiRequestError) {
@@ -105,7 +105,7 @@ export default function EscenaCobroPage() {
       try {
         await enqueueOperation({
           type: 'CREATE_COBRO',
-          endpoint: '/api/v1/sales/payments',
+          endpoint: '/api/v1/cobros',
           method: 'POST',
           payload: paymentPayload,
           maxRetries: 5,

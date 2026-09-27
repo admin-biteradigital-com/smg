@@ -184,7 +184,7 @@ export default function EscenaCobroSinVentaPage() {
         throw new NetworkError('Sin conexión a internet');
       }
 
-      await api.post<PaymentResponse>('/api/v1/sales/payments', paymentPayload);
+      await api.post<PaymentResponse>('/api/v1/cobros', paymentPayload);
 
       const montoFormateado = montoNum.toLocaleString('es-CL');
       setCobroExitosoMsg(`Cobro de $${montoFormateado} registrado exitosamente para la Venta #${selectedVenta.id}.`);
@@ -212,7 +212,7 @@ export default function EscenaCobroSinVentaPage() {
       try {
         await enqueueOperation({
           type: 'CREATE_COBRO',
-          endpoint: '/api/v1/sales/payments',
+          endpoint: '/api/v1/cobros',
           method: 'POST',
           payload: paymentPayload,
           maxRetries: 5,

@@ -173,7 +173,7 @@ export default function CuentasCorrientesPage() {
     };
 
     try {
-      await api.post('/api/v1/sales/payments', payload);
+      await api.post('/api/v1/cobros', payload);
 
       setCobroExitosoMsg(
         `Cobro de $${montoNum.toLocaleString('es-CL')} registrado exitosamente para la Venta #${cobrandoVenta.id}.`

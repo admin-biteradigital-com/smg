@@ -60,7 +60,7 @@ export default function CheckoutPage() {
     setStatusLoading(true);
     setErrorMsg(null);
     try {
-      const res = await api.get<PaymentStatusResponse>(`/api/v1/payments/${idPedido}/status`);
+      const res = await api.get<PaymentStatusResponse>(`/api/v1/pagos/${idPedido}/estado`);
       setPaymentStatus(res.data);
     } catch (err: any) {
       console.error('Error al obtener estado del pago:', err);
@@ -88,7 +88,7 @@ export default function CheckoutPage() {
 
     try {
       // 1. Iniciar checkout en SIGLO API (ADR-009 / Hosted Webpay Plus)
-      const res = await api.post<CheckoutResponse>('/api/v1/payments/checkout', {
+      const res = await api.post<CheckoutResponse>('/api/v1/pagos/checkout', {
         idPedido: idPedidoInput.trim(),
       });
 

@@ -322,7 +322,7 @@ export async function fetchCatalog<T>(params?: CatalogoFilters): Promise<ApiResp
  * Obtiene los clientes asignados al vendedor autenticado.
  */
 export async function fetchClientes<T>(): Promise<ApiResponse<T>> {
-  return api.get<ApiResponse<T>>('/api/v1/clients');
+  return api.get<ApiResponse<T>>('/api/v1/clientes');
 }
 
 // ─── Jornada helpers ──────────────────────────────────────────────────────────
@@ -385,24 +385,36 @@ export async function cerrarJornada(
   return api.post<ApiResponse<ResumenCierre>>(`/api/v1/jornadas/${idJornada}/cierre`, payload ?? {});
 }
 
-// ─── ADR-013: Cuentas Corrientes y Cobros ─────────────────────────────────────
+// ─── ADR-013 / ADR-017 Lote 5: Cuentas Corrientes, Ventas y Cobros ───────────
 
 /**
  * Obtiene el resumen de saldos pendientes de todos los clientes.
+ * Endpoint ADR-017 Lote 5: GET /api/v1/ventas/clientes/saldos
  */
 export async function getClientesSaldosPendientes(): Promise<ApiResponse<SaldoCliente[]>> {
-  return api.get<ApiResponse<SaldoCliente[]>>('/api/v1/sales/clientes/saldos');
+  return api.get<ApiResponse<SaldoCliente[]>>('/api/v1/ventas/clientes/saldos');
 }
 
 /**
  * Obtiene el listado de ventas con cobro pendiente para un cliente específico.
+ * Endpoint ADR-017 Lote 5: GET /api/v1/ventas/cliente/:id/pendientes
  */
 export async function getVentasPendientesByCliente(
   clienteId: number
 ): Promise<ApiResponse<VentaPendiente[]>> {
   return api.get<ApiResponse<VentaPendiente[]>>(
-    `/api/v1/sales/cliente/${clienteId}/pendientes`
+    `/api/v1/ventas/cliente/${clienteId}/pendientes`
   );
+}
+
+/**
+ * Obtiene el listado de cobros registrados para una venta.
+ * Endpoint ADR-017 Lote 5: GET /api/v1/ventas/:ventaId/cobros
+ */
+export async function getCobrosDeVenta<T = unknown>(
+  ventaId: number | string
+): Promise<ApiResponse<T>> {
+  return api.get<ApiResponse<T>>(`/api/v1/ventas/${ventaId}/cobros`);
 }
 
 // ─── ADR-014: Empresa / Administración ────────────────────────────────────────
@@ -556,10 +568,11 @@ export async function updateProducto(
   return api.patch<ApiResponse<ProductoAdminDetalle>>(`/api/v1/admin/productos/${id}`, payload);
 }
 
-// ─── ADR-014: Clientes y Sucursales Admin ─────────────────────────────────────
+// ─── ADR-014 / ADR-017 Lote 3: Clientes y Sucursales Admin ───────────────────
 
 /**
  * Obtiene el listado de clientes en modo gestión con filtros opcionales (q, activo, paginación).
+ * Endpoint ADR-017 Lote 3: GET /api/v1/clientes
  */
 export async function getClientesAdmin(
   filters?: { q?: string; activo?: boolean; page?: number; pageSize?: number }
@@ -571,52 +584,57 @@ export async function getClientesAdmin(
   if (filters?.activo !== undefined) params.set('activo', String(filters.activo));
 
   const query = params.toString() ? `?${params.toString()}` : '';
-  return api.get<ApiResponse<ClienteAdminItem[]>>(`/api/v1/clients${query}`);
+  return api.get<ApiResponse<ClienteAdminItem[]>>(`/api/v1/clientes${query}`);
 }
 
 /**
  * Obtiene el detalle completo de un cliente y sus sucursales por ID.
+ * Endpoint ADR-017 Lote 3: GET /api/v1/clientes/:id
  */
 export async function getClienteById(
   id: number
 ): Promise<ApiResponse<ClienteAdminDetalle>> {
-  return api.get<ApiResponse<ClienteAdminDetalle>>(`/api/v1/clients/${id}`);
+  return api.get<ApiResponse<ClienteAdminDetalle>>(`/api/v1/clientes/${id}`);
 }
 
 /**
  * Crea un nuevo cliente con su sucursal principal inicial.
+ * Endpoint ADR-017 Lote 3: POST /api/v1/clientes
  */
 export async function createCliente(
   payload: CreateClientePayload
 ): Promise<ApiResponse<ClienteAdminDetalle>> {
-  return api.post<ApiResponse<ClienteAdminDetalle>>('/api/v1/clients', payload);
+  return api.post<ApiResponse<ClienteAdminDetalle>>('/api/v1/clientes', payload);
 }
 
 /**
  * Actualiza los datos de un cliente existente.
+ * Endpoint ADR-017 Lote 3: PATCH /api/v1/clientes/:id
  */
 export async function updateCliente(
   id: number,
   payload: UpdateClientePayload
 ): Promise<ApiResponse<ClienteAdminDetalle>> {
-  return api.patch<ApiResponse<ClienteAdminDetalle>>(`/api/v1/clients/${id}`, payload);
+  return api.patch<ApiResponse<ClienteAdminDetalle>>(`/api/v1/clientes/${id}`, payload);
 }
 
 /**
  * Crea una sucursal adicional para un cliente.
+ * Endpoint ADR-017 Lote 3: POST /api/v1/clientes/:id/sucursales
  */
 export async function createSucursal(
   clienteId: number,
   payload: CreateSucursalPayload
 ): Promise<ApiResponse<SucursalAdminItem>> {
   return api.post<ApiResponse<SucursalAdminItem>>(
-    `/api/v1/clients/${clienteId}/sucursales`,
+    `/api/v1/clientes/${clienteId}/sucursales`,
     payload
   );
 }
 
 /**
  * Actualiza los datos de una sucursal de un cliente.
+ * Endpoint ADR-017 Lote 3: PATCH /api/v1/clientes/:id/sucursales/:sucursalId
  */
 export async function updateSucursal(
   clienteId: number,
@@ -624,7 +642,7 @@ export async function updateSucursal(
   payload: UpdateSucursalPayload
 ): Promise<ApiResponse<SucursalAdminItem>> {
   return api.patch<ApiResponse<SucursalAdminItem>>(
-    `/api/v1/clients/${clienteId}/sucursales/${sucursalId}`,
+    `/api/v1/clientes/${clienteId}/sucursales/${sucursalId}`,
     payload
   );
 }

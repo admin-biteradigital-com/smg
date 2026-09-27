@@ -7,6 +7,16 @@ import {
   getCatalogoMarcas,
   getCatalogoProductoById,
   fetchCatalog,
+  fetchClientes,
+  getClientesAdmin,
+  getClienteById,
+  createCliente,
+  updateCliente,
+  createSucursal,
+  updateSucursal,
+  getClientesSaldosPendientes,
+  getVentasPendientesByCliente,
+  getCobrosDeVenta,
 } from '@/lib/api';
 
 describe('ADR-017 Lote 1: Endpoints en Español (/salud, /panel, /configuracion/publica)', () => {
@@ -145,5 +155,93 @@ describe('ADR-017 Lote 2: Catálogo Público en Español (/catalogo, /catalogo/m
       expect(getSpy).toHaveBeenCalledWith('/api/v1/catalogo/42');
       expect(res).toEqual(mockProducto);
     });
+  });
+});
+
+describe('ADR-017 Lote 3: Clientes y Sucursales en Español (/clientes)', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('fetchClientes() debe consultar GET /api/v1/clientes', async () => {
+    const getSpy = vi.spyOn(api, 'get').mockResolvedValueOnce({ data: [] } as any);
+    await fetchClientes();
+    expect(getSpy).toHaveBeenCalledWith('/api/v1/clientes');
+  });
+
+  it('getClientesAdmin() debe consultar GET /api/v1/clientes con query params', async () => {
+    const getSpy = vi.spyOn(api, 'get').mockResolvedValueOnce({ data: [] } as any);
+    await getClientesAdmin({ q: 'almacen', activo: true, page: 1, pageSize: 25 });
+    expect(getSpy).toHaveBeenCalledWith('/api/v1/clientes?page=1&pageSize=25&q=almacen&activo=true');
+  });
+
+  it('getClienteById() debe consultar GET /api/v1/clientes/:id', async () => {
+    const getSpy = vi.spyOn(api, 'get').mockResolvedValueOnce({ data: { id: 7 } } as any);
+    await getClienteById(7);
+    expect(getSpy).toHaveBeenCalledWith('/api/v1/clientes/7');
+  });
+
+  it('createCliente() debe consultar POST /api/v1/clientes', async () => {
+    const postSpy = vi.spyOn(api, 'post').mockResolvedValueOnce({ data: { id: 8 } } as any);
+    const payload = {
+      razonSocial: 'Comercial Test',
+      rut: '77689935-6',
+      sucursalPrincipal: {
+        nombre: 'Casa Matriz',
+        direccion: 'Av Central 123',
+        ciudad: 'Santiago',
+        region: 'Metropolitana',
+      },
+    };
+    await createCliente(payload);
+    expect(postSpy).toHaveBeenCalledWith('/api/v1/clientes', payload);
+  });
+
+  it('updateCliente() debe consultar PATCH /api/v1/clientes/:id', async () => {
+    const patchSpy = vi.spyOn(api, 'patch').mockResolvedValueOnce({ data: { id: 8 } } as any);
+    await updateCliente(8, { razonSocial: 'Comercial Test SPA' });
+    expect(patchSpy).toHaveBeenCalledWith('/api/v1/clientes/8', { razonSocial: 'Comercial Test SPA' });
+  });
+
+  it('createSucursal() debe consultar POST /api/v1/clientes/:id/sucursales', async () => {
+    const postSpy = vi.spyOn(api, 'post').mockResolvedValueOnce({ data: { id: 1 } } as any);
+    const sucursalPayload = {
+      nombre: 'Sucursal Norte',
+      direccion: 'Av Norte 456',
+      ciudad: 'Antofagasta',
+      region: 'Antofagasta',
+    };
+    await createSucursal(8, sucursalPayload);
+    expect(postSpy).toHaveBeenCalledWith('/api/v1/clientes/8/sucursales', sucursalPayload);
+  });
+
+  it('updateSucursal() debe consultar PATCH /api/v1/clientes/:id/sucursales/:sucursalId', async () => {
+    const patchSpy = vi.spyOn(api, 'patch').mockResolvedValueOnce({ data: { id: 1 } } as any);
+    await updateSucursal(8, 1, { nombre: 'Sucursal Norte Editada' });
+    expect(patchSpy).toHaveBeenCalledWith('/api/v1/clientes/8/sucursales/1', { nombre: 'Sucursal Norte Editada' });
+  });
+});
+
+describe('ADR-017 Lote 5: Ventas, Cobros y Saldos en Español (/ventas)', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('getClientesSaldosPendientes() debe consultar GET /api/v1/ventas/clientes/saldos', async () => {
+    const getSpy = vi.spyOn(api, 'get').mockResolvedValueOnce({ data: [] } as any);
+    await getClientesSaldosPendientes();
+    expect(getSpy).toHaveBeenCalledWith('/api/v1/ventas/clientes/saldos');
+  });
+
+  it('getVentasPendientesByCliente() debe consultar GET /api/v1/ventas/cliente/:id/pendientes', async () => {
+    const getSpy = vi.spyOn(api, 'get').mockResolvedValueOnce({ data: [] } as any);
+    await getVentasPendientesByCliente(15);
+    expect(getSpy).toHaveBeenCalledWith('/api/v1/ventas/cliente/15/pendientes');
+  });
+
+  it('getCobrosDeVenta() debe consultar GET /api/v1/ventas/:ventaId/cobros', async () => {
+    const getSpy = vi.spyOn(api, 'get').mockResolvedValueOnce({ data: [] } as any);
+    await getCobrosDeVenta(44);
+    expect(getSpy).toHaveBeenCalledWith('/api/v1/ventas/44/cobros');
   });
 });

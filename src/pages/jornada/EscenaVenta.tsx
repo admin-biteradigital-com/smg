@@ -215,7 +215,7 @@ export default function EscenaVentaPage() {
         throw new NetworkError('Sin conexión a internet');
       }
 
-      const res = await api.post<SaleResponse>('/api/v1/sales/sales', payload);
+      const res = await api.post<SaleResponse>('/api/v1/ventas', payload);
 
       // Refrescar stock de la jornada tras venta exitosa
       await refreshJornada();
@@ -240,7 +240,7 @@ export default function EscenaVentaPage() {
       try {
         await enqueueOperation({
           type: 'CREATE_PEDIDO',
-          endpoint: '/api/v1/sales/sales',
+          endpoint: '/api/v1/ventas',
           method: 'POST',
           payload,
           maxRetries: 5,
