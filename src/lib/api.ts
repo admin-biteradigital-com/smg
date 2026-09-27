@@ -730,5 +730,51 @@ export async function desasociarProveedorDeProducto(
   );
 }
 
+// ─── Stock Depósito: Consulta y Ajustes ───────────────────────────────────────
 
+/** Ítem de stock devuelto por GET /api/v1/stock. */
+export interface StockDepositoItem {
+  id: number;
+  producto: { id: number; nombre: string };
+  numeroLote: string;
+  fechaVencimiento: string;
+  cantidadActual: number;
+  unidadBase: string;
+  diasParaVencer: number;
+  alertaVencimiento: boolean;
+}
+
+/** Resultado de POST /api/v1/stock-deposito/ajustes. */
+export interface AjusteStockResultado {
+  id_producto: number;
+  numero_lote: string;
+  fecha_vencimiento: string;
+  cantidad_anterior: number;
+  cantidad_nueva: number;
+  lote_creado: boolean;
+}
+
+/**
+ * Obtiene el stock actual del depósito (todos los lotes con cantidad > 0).
+ */
+export async function getStockDeposito(): Promise<ApiResponse<StockDepositoItem[]>> {
+  return api.get<ApiResponse<StockDepositoItem[]>>('/api/v1/stock');
+}
+
+/**
+ * Ajusta la cantidad de un lote específico en el depósito.
+ * Fija la cantidad (no acumula); si el lote no existe, lo crea.
+ */
+export async function ajustarStockDeposito(payload: {
+  id_producto: number;
+  numero_lote: string;
+  fecha_vencimiento: string;
+  cantidad_nueva: number;
+  motivo?: string;
+}): Promise<ApiResponse<AjusteStockResultado>> {
+  return api.post<ApiResponse<AjusteStockResultado>>(
+    '/api/v1/stock-deposito/ajustes',
+    payload
+  );
+}
 

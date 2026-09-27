@@ -47,6 +47,7 @@ const ClientesListPage = lazy(() => import('@/pages/gestion/clientes/ClientesLis
 const ClienteFormPage = lazy(() => import('@/pages/gestion/clientes/ClienteFormPage'));
 const ProveedoresListPage = lazy(() => import('@/pages/gestion/proveedores/ProveedoresListPage'));
 const ProveedorFormPage = lazy(() => import('@/pages/gestion/proveedores/ProveedorFormPage'));
+const StockDepositoPage = lazy(() => import('@/pages/gestion/stock/StockDepositoPage'));
 
 // ── Grupo Lazy: Modo Jornada (ADR-012 — Consolidado en un único chunk) ───────
 const jornadaModulePromise = import('@/pages/jornada');
@@ -192,6 +193,9 @@ export default function App() {
             <Route path="/gestion/proveedores" element={<ProveedoresListPage />} />
             <Route path="/gestion/proveedores/nuevo" element={<ProveedorFormPage />} />
             <Route path="/gestion/proveedores/:id/editar" element={<ProveedorFormPage />} />
+
+            {/* Stock Depósito */}
+            <Route path="/gestion/stock" element={<StockDepositoPage />} />
 
             {/* Catálogo Público */}
             <Route path="/gestion/catalogo" element={<CatalogoGestionPage />} />
