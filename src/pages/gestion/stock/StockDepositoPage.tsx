@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ChevronLeft,
@@ -12,13 +12,18 @@ import {
   CheckCircle2,
   X,
   Pencil,
+  Plus,
+  ChevronRight,
+  ArrowLeft,
 } from 'lucide-react';
 import {
   getStockDeposito,
   ajustarStockDeposito,
+  getProductosAdmin,
   ApiRequestError,
 } from '@/lib/api';
 import type { StockDepositoItem } from '@/lib/api';
+import type { ProductoAdminItem } from '@/types';
 
 // ─── StockDepositoPage ────────────────────────────────────────────────────────
 // Ruta: /gestion/stock
@@ -46,6 +51,21 @@ export default function StockDepositoPage() {
   const [motivo, setMotivo] = useState('');
   const [enviandoAjuste, setEnviandoAjuste] = useState(false);
   const [errorAjuste, setErrorAjuste] = useState<string | null>(null);
+
+  // Modal de nuevo lote
+  const [nuevoLoteOpen, setNuevoLoteOpen] = useState(false);
+  const [nuevoLotePaso, setNuevoLotePaso] = useState<'producto' | 'detalle'>('producto');
+  const [productosDisponibles, setProductosDisponibles] = useState<ProductoAdminItem[]>([]);
+  const [loadingProductos, setLoadingProductos] = useState(false);
+  const [busquedaProducto, setBusquedaProducto] = useState('');
+  const [productoSeleccionado, setProductoSeleccionado] = useState<ProductoAdminItem | null>(null);
+  const [nuevoNumeroLote, setNuevoNumeroLote] = useState('');
+  const [nuevoFechaVenc, setNuevoFechaVenc] = useState('');
+  const [nuevoCantidad, setNuevoCantidad] = useState('');
+  const [nuevoMotivo, setNuevoMotivo] = useState('');
+  const [enviandoNuevo, setEnviandoNuevo] = useState(false);
+  const [errorNuevo, setErrorNuevo] = useState<string | null>(null);
+  const nuevoLoteInputRef = useRef<HTMLInputElement>(null);
 
   // ─── Load Data ──────────────────────────────────────────────────────────────
 
@@ -170,6 +190,123 @@ export default function StockDepositoPage() {
     }
   };
 
+  // ─── Nuevo Lote ─────────────────────────────────────────────────────────────
+
+  const abrirNuevoLote = async () => {
+    setNuevoLoteOpen(true);
+    setNuevoLotePaso('producto');
+    setProductoSeleccionado(null);
+    setBusquedaProducto('');
+    setNuevoNumeroLote('');
+    setNuevoFechaVenc('');
+    setNuevoCantidad('');
+    setNuevoMotivo('');
+    setErrorNuevo(null);
+    setEnviandoNuevo(false);
+
+    // Cargar productos si no los tenemos aún
+    if (productosDisponibles.length === 0) {
+      setLoadingProductos(true);
+      try {
+        const res = await getProductosAdmin(1); // solo activos
+        setProductosDisponibles(res?.data || []);
+      } catch (err) {
+        console.error('[StockDepositoPage] Error al cargar productos:', err);
+        setErrorNuevo('No se pudo cargar la lista de productos.');
+      } finally {
+        setLoadingProductos(false);
+      }
+    }
+  };
+
+  const cerrarNuevoLote = () => {
+    setNuevoLoteOpen(false);
+    setProductoSeleccionado(null);
+    setBusquedaProducto('');
+    setNuevoNumeroLote('');
+    setNuevoFechaVenc('');
+    setNuevoCantidad('');
+    setNuevoMotivo('');
+    setErrorNuevo(null);
+    setEnviandoNuevo(false);
+  };
+
+  const seleccionarProducto = (prod: ProductoAdminItem) => {
+    setProductoSeleccionado(prod);
+    setNuevoLotePaso('detalle');
+    setErrorNuevo(null);
+    // Focus en el primer campo tras animación
+    setTimeout(() => nuevoLoteInputRef.current?.focus(), 100);
+  };
+
+  const volverAProducto = () => {
+    setNuevoLotePaso('producto');
+    setErrorNuevo(null);
+  };
+
+  const productosFiltrados = productosDisponibles.filter((p) => {
+    if (!busquedaProducto.trim()) return true;
+    const q = busquedaProducto.toLowerCase();
+    return (
+      p.nombre.toLowerCase().includes(q) ||
+      (p.codigoBarras && p.codigoBarras.toLowerCase().includes(q))
+    );
+  });
+
+  const handleConfirmarNuevoLote = async () => {
+    if (!productoSeleccionado) return;
+
+    if (!nuevoNumeroLote.trim()) {
+      setErrorNuevo('El número de lote es obligatorio.');
+      return;
+    }
+    if (!nuevoFechaVenc) {
+      setErrorNuevo('La fecha de vencimiento es obligatoria.');
+      return;
+    }
+    const cantidad = parseInt(nuevoCantidad, 10);
+    if (isNaN(cantidad) || cantidad < 0) {
+      setErrorNuevo('La cantidad debe ser un número entero mayor o igual a 0.');
+      return;
+    }
+
+    setEnviandoNuevo(true);
+    setErrorNuevo(null);
+
+    try {
+      const resultado = await ajustarStockDeposito({
+        id_producto: productoSeleccionado.id,
+        numero_lote: nuevoNumeroLote.trim(),
+        fecha_vencimiento: nuevoFechaVenc,
+        cantidad_nueva: cantidad,
+        motivo: nuevoMotivo.trim() || undefined,
+      });
+
+      const data = resultado?.data;
+      const fueCreado = data?.lote_creado ?? true;
+
+      setExitoMsg(
+        fueCreado
+          ? `Lote nuevo "${nuevoNumeroLote.trim()}" creado para ${productoSeleccionado.nombre} con ${cantidad} ${productoSeleccionado.nombreUnidadBase}.`
+          : `El lote "${nuevoNumeroLote.trim()}" ya existía para ${productoSeleccionado.nombre} — cantidad actualizada a ${cantidad} ${productoSeleccionado.nombreUnidadBase}.`
+      );
+
+      cerrarNuevoLote();
+      await loadData();
+      setTimeout(() => setExitoMsg(null), 6000);
+    } catch (err: unknown) {
+      console.error('[StockDepositoPage] Error al crear lote nuevo:', err);
+      if (err instanceof ApiRequestError) {
+        setErrorNuevo(err.message || `Error del servidor (HTTP ${err.status})`);
+      } else if (err instanceof Error) {
+        setErrorNuevo(err.message);
+      } else {
+        setErrorNuevo('Error desconocido al registrar el lote.');
+      }
+      setEnviandoNuevo(false);
+    }
+  };
+
   // ─── Helpers ────────────────────────────────────────────────────────────────
 
   const formatFecha = (iso: string) => {
@@ -247,8 +384,15 @@ export default function StockDepositoPage() {
             </div>
             <p className="text-sm font-bold text-zinc-200">Sin stock registrado</p>
             <p className="text-xs text-zinc-400 mt-1 max-w-xs leading-relaxed">
-              Aún no hay lotes de stock en el depósito. Se cargarán al recibir mercadería.
+              Aún no hay lotes de stock en el depósito.
             </p>
+            <button
+              onClick={abrirNuevoLote}
+              className="mt-4 flex items-center gap-1.5 px-4 py-2.5 bg-orange-600 hover:bg-orange-500 text-white rounded-xl text-xs font-bold transition-all active:scale-95 shadow-md"
+            >
+              <Plus className="w-4 h-4" />
+              Agregar primer lote
+            </button>
           </div>
         ) : (
           <div className="space-y-4">
@@ -272,15 +416,24 @@ export default function StockDepositoPage() {
               )}
             </div>
 
-            {/* Resumen */}
+            {/* Resumen + Botón Agregar */}
             <div className="flex items-center justify-between px-1 text-xs text-zinc-400 font-medium">
               <span>
                 {filtrado.length} {filtrado.length === 1 ? 'lote' : 'lotes'}
                 {busqueda.trim() && ` de ${totalLotes}`}
               </span>
-              <span className="text-zinc-500">
-                {totalUnidades.toLocaleString('es-CL')} unidades totales
-              </span>
+              <div className="flex items-center gap-3">
+                <span className="text-zinc-500">
+                  {totalUnidades.toLocaleString('es-CL')} un. totales
+                </span>
+                <button
+                  onClick={abrirNuevoLote}
+                  className="flex items-center gap-1 px-3 py-1.5 bg-orange-600 hover:bg-orange-500 text-white rounded-xl text-[11px] font-bold transition-all active:scale-95 shadow-md"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Agregar lote
+                </button>
+              </div>
             </div>
 
             {/* Lista agrupada por producto */}
@@ -504,6 +657,240 @@ export default function StockDepositoPage() {
                 )}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal de Nuevo Lote ─────────────────────────────────────────────── */}
+      {nuevoLoteOpen && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={cerrarNuevoLote}
+          />
+
+          {/* Panel */}
+          <div className="relative w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-t-3xl sm:rounded-3xl p-6 space-y-5 shadow-2xl animate-slide-up sm:animate-fade-in mx-4 sm:mx-0 max-h-[85dvh] flex flex-col">
+            {/* Header */}
+            <div className="flex items-start justify-between gap-3 shrink-0">
+              <div className="flex-1 min-w-0">
+                <h2 className="text-base font-bold text-white">
+                  {nuevoLotePaso === 'producto' ? 'Seleccionar Producto' : 'Nuevo Lote'}
+                </h2>
+                {nuevoLotePaso === 'detalle' && productoSeleccionado && (
+                  <button
+                    onClick={volverAProducto}
+                    className="flex items-center gap-1 text-xs text-orange-400 hover:text-orange-300 mt-0.5 transition-colors"
+                  >
+                    <ArrowLeft className="w-3 h-3" />
+                    Cambiar producto
+                  </button>
+                )}
+              </div>
+              <button
+                onClick={cerrarNuevoLote}
+                className="p-1.5 text-zinc-500 hover:text-white hover:bg-zinc-800 rounded-xl transition-colors shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* ── Paso 1: Seleccionar Producto ─────────────────────────────── */}
+            {nuevoLotePaso === 'producto' && (
+              <div className="flex-1 min-h-0 flex flex-col space-y-3 overflow-hidden">
+                {loadingProductos ? (
+                  <div className="flex flex-col items-center justify-center py-12 gap-3 text-zinc-500">
+                    <Loader2 className="w-6 h-6 animate-spin text-orange-500" />
+                    <p className="text-xs">Cargando productos...</p>
+                  </div>
+                ) : errorNuevo && productosDisponibles.length === 0 ? (
+                  <div className="flex items-start gap-2 bg-rose-500/10 border border-rose-500/25 rounded-2xl p-3 text-xs text-rose-400">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                    <p className="leading-relaxed">{errorNuevo}</p>
+                  </div>
+                ) : (
+                  <>
+                    {/* Búsqueda de producto */}
+                    <div className="relative shrink-0">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none" />
+                      <input
+                        type="text"
+                        placeholder="Buscar por nombre o código..."
+                        value={busquedaProducto}
+                        onChange={(e) => setBusquedaProducto(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2.5 bg-zinc-950 border border-zinc-800 focus:border-orange-500 rounded-2xl text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-orange-500/50 transition-all"
+                        autoFocus
+                      />
+                      {busquedaProducto && (
+                        <button
+                          onClick={() => setBusquedaProducto('')}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 text-zinc-500 hover:text-white rounded-md transition-colors"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+
+                    <p className="text-[11px] text-zinc-500 px-1 shrink-0">
+                      {productosFiltrados.length} {productosFiltrados.length === 1 ? 'producto' : 'productos'}
+                      {busquedaProducto.trim() && ` encontrados`}
+                    </p>
+
+                    {/* Lista de productos */}
+                    <div className="flex-1 min-h-0 overflow-y-auto -mx-1 px-1 space-y-1">
+                      {productosFiltrados.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-10 text-center">
+                          <Search className="w-6 h-6 text-zinc-600 mb-2" />
+                          <p className="text-xs text-zinc-400">
+                            No se encontraron productos con "{busquedaProducto}"
+                          </p>
+                        </div>
+                      ) : (
+                        productosFiltrados.map((prod) => (
+                          <button
+                            key={prod.id}
+                            onClick={() => seleccionarProducto(prod)}
+                            className="w-full px-3.5 py-3 bg-zinc-950/60 hover:bg-zinc-800/60 border border-zinc-800/60 hover:border-zinc-700/60 rounded-2xl flex items-center gap-3 transition-all active:scale-[0.98] text-left group"
+                          >
+                            <div className="w-8 h-8 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center shrink-0">
+                              <Package className="w-4 h-4 text-orange-400" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-bold text-zinc-100 truncate">
+                                {prod.nombre}
+                              </p>
+                              <p className="text-[11px] text-zinc-500">
+                                {prod.nombreUnidadBase}
+                                {prod.codigoBarras && ` · ${prod.codigoBarras}`}
+                              </p>
+                            </div>
+                            <ChevronRight className="w-4 h-4 text-zinc-600 group-hover:text-zinc-300 transition-colors shrink-0" />
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* ── Paso 2: Detalle del Lote ──────────────────────────────────── */}
+            {nuevoLotePaso === 'detalle' && productoSeleccionado && (
+              <div className="flex-1 min-h-0 overflow-y-auto space-y-4">
+                {/* Producto seleccionado */}
+                <div className="bg-zinc-950/80 border border-zinc-800 rounded-2xl p-3.5 flex items-center gap-2.5 text-xs">
+                  <div className="w-7 h-7 rounded-lg bg-orange-500/10 border border-orange-500/20 flex items-center justify-center shrink-0">
+                    <Package className="w-3.5 h-3.5 text-orange-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-zinc-200 truncate">{productoSeleccionado.nombre}</p>
+                    <p className="text-[11px] text-zinc-500">{productoSeleccionado.nombreUnidadBase}</p>
+                  </div>
+                </div>
+
+                {/* Input: Número de Lote */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-zinc-300 block">
+                    Número de lote <span className="text-rose-400">*</span>
+                  </label>
+                  <input
+                    ref={nuevoLoteInputRef}
+                    type="text"
+                    value={nuevoNumeroLote}
+                    onChange={(e) => {
+                      setNuevoNumeroLote(e.target.value);
+                      setErrorNuevo(null);
+                    }}
+                    placeholder="Ej: L2026-0145"
+                    className="w-full px-4 py-3 bg-zinc-950 border border-zinc-800 focus:border-orange-500 rounded-2xl text-zinc-100 text-sm placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-orange-500/50 transition-all font-mono"
+                  />
+                </div>
+
+                {/* Input: Fecha de Vencimiento */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-zinc-300 block">
+                    Fecha de vencimiento <span className="text-rose-400">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={nuevoFechaVenc}
+                    onChange={(e) => {
+                      setNuevoFechaVenc(e.target.value);
+                      setErrorNuevo(null);
+                    }}
+                    className="w-full px-4 py-3 bg-zinc-950 border border-zinc-800 focus:border-orange-500 rounded-2xl text-zinc-100 text-sm focus:outline-none focus:ring-1 focus:ring-orange-500/50 transition-all [color-scheme:dark]"
+                  />
+                </div>
+
+                {/* Input: Cantidad */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-zinc-300 block">
+                    Cantidad <span className="text-rose-400">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min="0"
+                    step="1"
+                    value={nuevoCantidad}
+                    onChange={(e) => {
+                      setNuevoCantidad(e.target.value);
+                      setErrorNuevo(null);
+                    }}
+                    placeholder="Ej: 200"
+                    className="w-full px-4 py-3 bg-zinc-950 border border-zinc-800 focus:border-orange-500 rounded-2xl text-zinc-100 text-sm placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-orange-500/50 transition-all tabular-nums"
+                  />
+                </div>
+
+                {/* Input: Motivo */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-zinc-300 block">
+                    Motivo <span className="text-zinc-600">(opcional)</span>
+                  </label>
+                  <textarea
+                    value={nuevoMotivo}
+                    onChange={(e) => setNuevoMotivo(e.target.value)}
+                    placeholder="Ej: Recepción compra proveedor X"
+                    rows={2}
+                    className="w-full px-4 py-2.5 bg-zinc-950 border border-zinc-800 focus:border-orange-500 rounded-2xl text-zinc-100 text-xs placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-orange-500/50 transition-all resize-none"
+                  />
+                </div>
+
+                {/* Error */}
+                {errorNuevo && (
+                  <div className="flex items-start gap-2 bg-rose-500/10 border border-rose-500/25 rounded-2xl p-3 text-xs text-rose-400">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                    <p className="leading-relaxed">{errorNuevo}</p>
+                  </div>
+                )}
+
+                {/* Botones */}
+                <div className="flex gap-3 pt-1">
+                  <button
+                    onClick={cerrarNuevoLote}
+                    disabled={enviandoNuevo}
+                    className="flex-1 py-3 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 rounded-2xl text-xs font-bold transition-all disabled:opacity-50"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleConfirmarNuevoLote}
+                    disabled={enviandoNuevo || !nuevoNumeroLote.trim() || !nuevoFechaVenc || nuevoCantidad === ''}
+                    className="flex-1 py-3 bg-orange-600 hover:bg-orange-500 text-white rounded-2xl text-xs font-bold transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-md"
+                  >
+                    {enviandoNuevo ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        Creando...
+                      </>
+                    ) : (
+                      'Crear Lote'
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
