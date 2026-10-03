@@ -15,7 +15,11 @@ import {
   Plus,
   ChevronRight,
   ArrowLeft,
+  Camera,
+  Barcode,
+  RefreshCw,
 } from 'lucide-react';
+import BarcodeScannerModal, { isBarcodeScannerSupported } from '@/components/gestion/BarcodeScannerModal';
 import {
   getStockDeposito,
   ajustarStockDeposito,
@@ -66,6 +70,12 @@ export default function StockDepositoPage() {
   const [enviandoNuevo, setEnviandoNuevo] = useState(false);
   const [errorNuevo, setErrorNuevo] = useState<string | null>(null);
   const nuevoLoteInputRef = useRef<HTMLInputElement>(null);
+
+  // Escaneo de código de barras en Paso 1 (Agregar lote)
+  // TODO: BarcodeDetector no funciona en iOS Safari — evaluar @zxing/browser si se necesita soporte cross-browser
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [scannedMatch, setScannedMatch] = useState<ProductoAdminItem | null>(null);
+  const [scannedNotFoundCode, setScannedNotFoundCode] = useState<string | null>(null);
 
   // ─── Load Data ──────────────────────────────────────────────────────────────
 
@@ -229,6 +239,24 @@ export default function StockDepositoPage() {
     setNuevoMotivo('');
     setErrorNuevo(null);
     setEnviandoNuevo(false);
+    setScannerOpen(false);
+    setScannedMatch(null);
+    setScannedNotFoundCode(null);
+  };
+
+  const handleBarcodeScanned = (codigo: string) => {
+    const clean = codigo.trim();
+    const match = productosDisponibles.find(
+      (p) => p.codigoBarras && p.codigoBarras.trim() === clean
+    );
+
+    if (match) {
+      setScannedMatch(match);
+      setScannedNotFoundCode(null);
+    } else {
+      setScannedNotFoundCode(clean);
+      setScannedMatch(null);
+    }
   };
 
   const seleccionarProducto = (prod: ProductoAdminItem) => {
@@ -711,23 +739,39 @@ export default function StockDepositoPage() {
                   </div>
                 ) : (
                   <>
-                    {/* Búsqueda de producto */}
-                    <div className="relative shrink-0">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none" />
-                      <input
-                        type="text"
-                        placeholder="Buscar por nombre o código..."
-                        value={busquedaProducto}
-                        onChange={(e) => setBusquedaProducto(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2.5 bg-zinc-950 border border-zinc-800 focus:border-orange-500 rounded-2xl text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-orange-500/50 transition-all"
-                        autoFocus
-                      />
-                      {busquedaProducto && (
+                    {/* Búsqueda de producto y Escáner */}
+                    <div className="flex gap-2 shrink-0">
+                      <div className="relative flex-1">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none" />
+                        <input
+                          type="text"
+                          placeholder="Buscar por nombre o código..."
+                          value={busquedaProducto}
+                          onChange={(e) => setBusquedaProducto(e.target.value)}
+                          className="w-full pl-10 pr-8 py-2.5 bg-zinc-950 border border-zinc-800 focus:border-orange-500 rounded-2xl text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-orange-500/50 transition-all"
+                          autoFocus
+                        />
+                        {busquedaProducto && (
+                          <button
+                            type="button"
+                            onClick={() => setBusquedaProducto('')}
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-zinc-500 hover:text-white rounded-lg transition-colors"
+                            title="Limpiar búsqueda"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+
+                      {isBarcodeScannerSupported && (
                         <button
-                          onClick={() => setBusquedaProducto('')}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 text-zinc-500 hover:text-white rounded-md transition-colors"
+                          type="button"
+                          onClick={() => setScannerOpen(true)}
+                          className="px-3 py-2.5 bg-zinc-950 hover:bg-zinc-900 border border-zinc-800 hover:border-orange-500/50 text-orange-400 rounded-2xl text-xs font-bold transition-all active:scale-95 flex items-center gap-1.5 shrink-0 shadow-sm"
+                          title="Escanear código de barras con la cámara"
                         >
-                          <X className="w-3.5 h-3.5" />
+                          <Camera className="w-3.5 h-3.5" />
+                          <span>Escanear</span>
                         </button>
                       )}
                     </div>
@@ -891,6 +935,162 @@ export default function StockDepositoPage() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Escáner de Código de Barras (Cámara en vivo / Foto) */}
+      <BarcodeScannerModal
+        isOpen={scannerOpen}
+        onClose={() => setScannerOpen(false)}
+        onScan={handleBarcodeScanned}
+      />
+
+      {/* Modal de Confirmación: Coincidencia Encontrada */}
+      {scannedMatch && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div
+            className="absolute inset-0 bg-black/80 backdrop-blur-md transition-opacity"
+            onClick={() => setScannedMatch(null)}
+          />
+          <div className="relative w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-t-3xl sm:rounded-3xl p-5 sm:p-6 space-y-4 shadow-2xl animate-slide-up sm:animate-fade-in text-zinc-100 flex flex-col">
+            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                  <CheckCircle2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-bold text-white">Producto encontrado</h2>
+                  <p className="text-[11px] text-zinc-400">Coincidencia por código de barras</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setScannedMatch(null)}
+                className="p-1.5 text-zinc-400 hover:text-white rounded-xl hover:bg-zinc-800 transition-colors"
+                title="Cerrar"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-4 space-y-2.5">
+              <div className="flex items-center gap-2">
+                <Package className="w-4 h-4 text-orange-400 shrink-0" />
+                <h3 className="text-base font-bold text-white leading-snug">
+                  {scannedMatch.nombre}
+                </h3>
+              </div>
+
+              <div className="flex items-center gap-2.5 text-xs text-zinc-400 flex-wrap pt-2 border-t border-zinc-900">
+                <span className="font-mono text-[11px] text-orange-300 bg-orange-500/10 px-2 py-0.5 rounded border border-orange-500/20 flex items-center gap-1">
+                  <Barcode className="w-3 h-3" />
+                  {scannedMatch.codigoBarras}
+                </span>
+                <span className="text-zinc-400 bg-zinc-900 px-2 py-0.5 rounded border border-zinc-800 text-[11px]">
+                  {scannedMatch.nombreUnidadBase || 'Unidad'}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const prod = scannedMatch;
+                  setScannedMatch(null);
+                  seleccionarProducto(prod);
+                }}
+                className="w-full py-2.5 px-4 bg-orange-600 hover:bg-orange-500 text-white rounded-xl text-xs font-bold shadow-md transition-all active:scale-95 flex items-center justify-center gap-1.5"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>Confirmar y seleccionar producto</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setScannedMatch(null)}
+                className="w-full py-2 px-4 text-zinc-400 hover:text-zinc-200 text-xs font-medium transition-colors"
+              >
+                Descartar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Alerta: Coincidencia No Encontrada */}
+      {scannedNotFoundCode && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div
+            className="absolute inset-0 bg-black/80 backdrop-blur-md transition-opacity"
+            onClick={() => setScannedNotFoundCode(null)}
+          />
+          <div className="relative w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-t-3xl sm:rounded-3xl p-5 sm:p-6 space-y-4 shadow-2xl animate-slide-up sm:animate-fade-in text-zinc-100 flex flex-col">
+            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400">
+                  <AlertCircle className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-bold text-white">
+                    No se encontró ningún producto con ese código
+                  </h2>
+                  <p className="text-[11px] text-zinc-400">Catálogo de productos activos</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setScannedNotFoundCode(null)}
+                className="p-1.5 text-zinc-400 hover:text-white rounded-xl hover:bg-zinc-800 transition-colors"
+                title="Cerrar"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-4 text-center space-y-1.5 shadow-inner">
+              <p className="text-xs text-zinc-400">
+                No existe ningún producto activo registrado con el código de barras:
+              </p>
+              <p className="text-lg font-mono font-bold tracking-wider text-rose-300 py-0.5">
+                {scannedNotFoundCode}
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setScannedNotFoundCode(null);
+                  setScannerOpen(true);
+                }}
+                className="w-full py-2.5 px-4 bg-orange-600 hover:bg-orange-500 text-white rounded-xl text-xs font-bold shadow-md transition-all active:scale-95 flex items-center justify-center gap-1.5"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Volver a intentar</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setBusquedaProducto(scannedNotFoundCode);
+                  setScannedNotFoundCode(null);
+                }}
+                className="w-full py-2.5 px-4 bg-zinc-800 hover:bg-zinc-750 border border-zinc-700 text-zinc-200 rounded-xl text-xs font-bold transition-all active:scale-95 flex items-center justify-center gap-1.5"
+              >
+                <Search className="w-3.5 h-3.5" />
+                <span>Buscar manualmente</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setScannedNotFoundCode(null)}
+                className="w-full py-2 px-4 text-zinc-400 hover:text-zinc-200 text-xs font-medium transition-colors"
+              >
+                Descartar
+              </button>
+            </div>
           </div>
         </div>
       )}

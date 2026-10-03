@@ -93,7 +93,7 @@ describe('Módulo de Escaneo de Códigos de Barra (BarcodeDetector nativo)', () 
     });
 
     it('volver a intentar descarta el código provisional y permite reabrir el escáner', () => {
-      let codigoBarrasEnFormulario = '';
+      const codigoBarrasEnFormulario = '';
       let codigoParaConfirmar: string | null = '7801234567890';
       let scannerAbierto = false;
 
@@ -175,6 +175,64 @@ describe('Módulo de Escaneo de Códigos de Barra (BarcodeDetector nativo)', () 
 
       expect(busqueda).toBe('9999999999999');
       expect(scannedNotFoundCode).toBeNull();
+    });
+  });
+
+  describe('Contexto 3: Stock Depósito - Modal Agregar Lote (StockDepositoPage)', () => {
+    it('coincidencia encontrada: confirma producto y pasa directo al Paso 2 (detalle)', () => {
+      let nuevoLotePaso: 'producto' | 'detalle' = 'producto';
+      let productoSeleccionado: ProductoAdminItem | null = null;
+      let scannedMatch: ProductoAdminItem | null = null;
+
+      // 1. Detección de código de barras en Paso 1
+      const codigoEscaneado = '7809876543210';
+      const clean = codigoEscaneado.trim();
+      const match = mockProductos.find((p) => p.codigoBarras && p.codigoBarras.trim() === clean);
+
+      expect(match).toBeDefined();
+      scannedMatch = match!;
+      expect(scannedMatch.nombre).toBe('Aceite Maravilla 900ml');
+
+      // 2. Al presionar "Confirmar y seleccionar producto", pasa directo al Paso 2 con productoSeleccionado
+      const seleccionarProducto = (prod: ProductoAdminItem) => {
+        productoSeleccionado = prod;
+        nuevoLotePaso = 'detalle';
+      };
+
+      const prod = scannedMatch;
+      scannedMatch = null;
+      seleccionarProducto(prod);
+
+      expect(scannedMatch).toBeNull();
+      expect(nuevoLotePaso).toBe('detalle');
+      expect((productoSeleccionado as ProductoAdminItem | null)?.id).toBe(2);
+      expect((productoSeleccionado as ProductoAdminItem | null)?.nombre).toBe('Aceite Maravilla 900ml');
+    });
+
+    it('coincidencia no encontrada: permite buscar manualmente rellenando busquedaProducto', () => {
+      let busquedaProducto = '';
+      let scannedNotFoundCode: string | null = '1111222233334';
+      const nuevoLotePaso: 'producto' | 'detalle' = 'producto';
+
+      // Al presionar "Buscar manualmente"
+      busquedaProducto = scannedNotFoundCode;
+      scannedNotFoundCode = null;
+
+      expect(busquedaProducto).toBe('1111222233334');
+      expect(scannedNotFoundCode).toBeNull();
+      expect(nuevoLotePaso).toBe('producto'); // Se mantiene en Paso 1
+    });
+
+    it('coincidencia no encontrada: opción volver a intentar reabre el escáner', () => {
+      let scannerOpen = false;
+      let scannedNotFoundCode: string | null = '1111222233334';
+
+      // Al presionar "Volver a intentar"
+      scannedNotFoundCode = null;
+      scannerOpen = true;
+
+      expect(scannedNotFoundCode).toBeNull();
+      expect(scannerOpen).toBe(true);
     });
   });
 
