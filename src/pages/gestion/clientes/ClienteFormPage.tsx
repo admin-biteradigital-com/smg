@@ -60,6 +60,7 @@ export default function ClienteFormPage() {
   const [razonSocial, setRazonSocial] = useState('');
   const [rut, setRut] = useState('');
   const [nombreFantasia, setNombreFantasia] = useState('');
+  const [giro, setGiro] = useState('');
   const [clienteTelefono, setClienteTelefono] = useState('');
   const [clienteEmail, setClienteEmail] = useState('');
   const [segmento, setSegmento] = useState<SegmentoCliente | ''>('');
@@ -106,6 +107,7 @@ export default function ClienteFormPage() {
         setRazonSocial(cli.razonSocial || '');
         setRut(cli.rut || '');
         setNombreFantasia(cli.nombreFantasia || '');
+        setGiro(cli.giro || '');
         setClienteTelefono(cli.telefono || '');
         setClienteEmail(cli.email || '');
         setSegmento(cli.segmento || '');
@@ -184,6 +186,7 @@ export default function ClienteFormPage() {
           razonSocial: cleanRazonSocial,
           rut: cleanRutVal,
           nombreFantasia: nombreFantasia.trim() || null,
+          giro: giro.trim() || null,
           telefono: clienteTelefono.trim() || null,
           email: clienteEmail.trim() || null,
           segmento: segmento || null,
@@ -214,6 +217,7 @@ export default function ClienteFormPage() {
           razonSocial: cleanRazonSocial,
           rut: cleanRutVal,
           nombreFantasia: nombreFantasia.trim() || null,
+          giro: giro.trim() || null,
           telefono: clienteTelefono.trim() || null,
           email: clienteEmail.trim() || null,
           segmento: segmento || null,
@@ -550,6 +554,21 @@ export default function ClienteFormPage() {
                     className="w-full px-3.5 py-2.5 bg-zinc-950 border border-zinc-800 focus:border-violet-500 rounded-xl text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none transition-colors"
                   />
                   <p className="text-[10px] text-zinc-500 mt-1">Nombre comercial con el que se conoce al cliente (opcional).</p>
+                </div>
+
+                {/* Giro */}
+                <div>
+                  <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
+                    Giro
+                  </label>
+                  <input
+                    type="text"
+                    value={giro}
+                    onChange={(e) => setGiro(e.target.value)}
+                    placeholder="Ej: Venta al por menor de alimentos y bebidas"
+                    className="w-full px-3.5 py-2.5 bg-zinc-950 border border-zinc-800 focus:border-violet-500 rounded-xl text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none transition-colors"
+                  />
+                  <p className="text-[10px] text-zinc-500 mt-1">Actividad económica del cliente — requerido para facturación electrónica.</p>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">

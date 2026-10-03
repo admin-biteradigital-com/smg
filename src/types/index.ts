@@ -565,6 +565,7 @@ export interface ClienteAdminItem {
   razonSocial: string;
   rut: string;
   nombreFantasia: string | null;
+  giro: string | null;
   telefono: string | null;
   email: string | null;
   segmento: SegmentoCliente | null;
@@ -598,6 +599,7 @@ export interface ClienteAdminDetalle {
   razonSocial: string;
   rut: string;
   nombreFantasia: string | null;
+  giro: string | null;
   telefono: string | null;
   email: string | null;
   segmento: SegmentoCliente | null;
@@ -612,6 +614,7 @@ export interface CreateClientePayload {
   razonSocial: string;
   rut: string;
   nombreFantasia?: string | null;
+  giro?: string | null;
   telefono?: string | null;
   email?: string | null;
   segmento?: SegmentoCliente | null;
@@ -635,6 +638,7 @@ export interface UpdateClientePayload {
   razonSocial?: string;
   rut?: string;
   nombreFantasia?: string | null;
+  giro?: string | null;
   telefono?: string | null;
   email?: string | null;
   segmento?: SegmentoCliente | null;
