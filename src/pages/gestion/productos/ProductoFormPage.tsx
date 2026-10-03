@@ -15,7 +15,13 @@ import {
   Store,
   Plus,
   Trash2,
+  Camera,
+  Barcode,
+  Sparkles,
+  RefreshCw,
+  X,
 } from 'lucide-react';
+import BarcodeScannerModal, { isBarcodeScannerSupported } from '@/components/gestion/BarcodeScannerModal';
 import {
   getUnidadesMedida,
   getProductoAdminById,
@@ -52,6 +58,12 @@ export default function ProductoFormPage() {
   const [proveedorParaQuitar, setProveedorParaQuitar] = useState<ProveedorProductoItem | null>(null);
   const [proveedorErrorMsg, setProveedorErrorMsg] = useState<string | null>(null);
   const [proveedorExitoMsg, setProveedorExitoMsg] = useState<string | null>(null);
+
+  // Detección de soporte nativo para BarcodeDetector
+  // TODO: BarcodeDetector no funciona en iOS Safari — evaluar @zxing/browser si se necesita soporte cross-browser
+  const hasBarcodeDetector = isBarcodeScannerSupported;
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [codigoParaConfirmar, setCodigoParaConfirmar] = useState<string | null>(null);
 
   // Campos: Identificación
   const [nombre, setNombre] = useState('');
@@ -368,9 +380,22 @@ export default function ProductoFormPage() {
                 {/* Código de barras y Unidad Base */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   <div>
-                    <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
-                      Código de Barras (Opcional)
-                    </label>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="block text-xs font-semibold text-zinc-300">
+                        Código de Barras <span className="text-zinc-500 font-normal">(Opcional)</span>
+                      </label>
+                      {hasBarcodeDetector && (
+                        <button
+                          type="button"
+                          onClick={() => setScannerOpen(true)}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-violet-600/15 hover:bg-violet-600/25 border border-violet-500/30 text-violet-300 text-[11px] font-bold transition-all active:scale-95 shadow-sm"
+                          title="Escanear código de barras con la cámara"
+                        >
+                          <Camera className="w-3.5 h-3.5 text-violet-400" />
+                          <span>Escanear</span>
+                        </button>
+                      )}
+                    </div>
                     <input
                       type="text"
                       value={codigoBarras}
@@ -857,6 +882,86 @@ export default function ProductoFormPage() {
               </div>
             </div>
           </form>
+        )}
+        {/* Modal de Escáner de Código de Barras (Cámara en vivo / Foto) */}
+        <BarcodeScannerModal
+          isOpen={scannerOpen}
+          onClose={() => setScannerOpen(false)}
+          onScan={(codigo) => {
+            setCodigoParaConfirmar(codigo);
+          }}
+        />
+
+        {/* Modal de Confirmación Explícita de Código Escaneado */}
+        {codigoParaConfirmar && (
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+            <div
+              className="absolute inset-0 bg-black/80 backdrop-blur-md transition-opacity"
+              onClick={() => setCodigoParaConfirmar(null)}
+            />
+            <div className="relative w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-t-3xl sm:rounded-3xl p-5 sm:p-6 space-y-4 shadow-2xl animate-slide-up sm:animate-fade-in text-zinc-100 flex flex-col">
+              <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-xl bg-violet-500/10 border border-violet-500/20 text-violet-400">
+                    <Barcode className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-sm font-bold text-white">
+                      Verificá que el código capturado sea el correcto
+                    </h2>
+                    <p className="text-[11px] text-zinc-400">
+                      Confirmá antes de insertarlo en el formulario del producto.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setCodigoParaConfirmar(null)}
+                  className="p-1.5 text-zinc-400 hover:text-white rounded-xl hover:bg-zinc-800 transition-colors"
+                  title="Cerrar verificación"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-4 text-center space-y-2 shadow-inner">
+                <div className="text-[10px] uppercase font-bold text-zinc-500 tracking-wider flex items-center justify-center gap-1.5">
+                  <Sparkles className="w-3 h-3 text-violet-400" />
+                  <span>Código Detectado</span>
+                </div>
+                <p className="text-2xl font-mono font-bold tracking-widest text-violet-300 select-all py-1">
+                  {codigoParaConfirmar}
+                </p>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCodigoParaConfirmar(null);
+                    setScannerOpen(true);
+                  }}
+                  className="w-full sm:flex-1 py-3 px-4 bg-zinc-800 hover:bg-zinc-750 border border-zinc-700 text-zinc-300 rounded-xl text-xs font-bold transition-all active:scale-95 flex items-center justify-center gap-1.5"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Volver a intentar</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCodigoBarras(codigoParaConfirmar);
+                    setCodigoParaConfirmar(null);
+                    setErrorMsg(null);
+                  }}
+                  className="w-full sm:flex-1 py-3 px-4 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold shadow-lg transition-all active:scale-95 flex items-center justify-center gap-1.5"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Confirmar y usar este código</span>
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </main>
     </div>
