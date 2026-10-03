@@ -59,6 +59,9 @@ export default function ClienteFormPage() {
   // Datos de Cliente
   const [razonSocial, setRazonSocial] = useState('');
   const [rut, setRut] = useState('');
+  const [nombreFantasia, setNombreFantasia] = useState('');
+  const [clienteTelefono, setClienteTelefono] = useState('');
+  const [clienteEmail, setClienteEmail] = useState('');
   const [segmento, setSegmento] = useState<SegmentoCliente | ''>('');
   const [limiteCredito, setLimiteCredito] = useState<string>('0');
   const [plazoCreditoDias, setPlazoCreditoDias] = useState<string>('0');
@@ -102,6 +105,9 @@ export default function ClienteFormPage() {
         const cli: ClienteAdminDetalle = res.data;
         setRazonSocial(cli.razonSocial || '');
         setRut(cli.rut || '');
+        setNombreFantasia(cli.nombreFantasia || '');
+        setClienteTelefono(cli.telefono || '');
+        setClienteEmail(cli.email || '');
         setSegmento(cli.segmento || '');
         setLimiteCredito(String(cli.limiteCredito ?? 0));
         setPlazoCreditoDias(String(cli.plazoCreditoDias ?? 0));
@@ -177,6 +183,9 @@ export default function ClienteFormPage() {
         const payload: UpdateClientePayload = {
           razonSocial: cleanRazonSocial,
           rut: cleanRutVal,
+          nombreFantasia: nombreFantasia.trim() || null,
+          telefono: clienteTelefono.trim() || null,
+          email: clienteEmail.trim() || null,
           segmento: segmento || null,
           limiteCredito: limiteNum,
           plazoCreditoDias: plazoNum,
@@ -204,6 +213,9 @@ export default function ClienteFormPage() {
         const payload: CreateClientePayload = {
           razonSocial: cleanRazonSocial,
           rut: cleanRutVal,
+          nombreFantasia: nombreFantasia.trim() || null,
+          telefono: clienteTelefono.trim() || null,
+          email: clienteEmail.trim() || null,
           segmento: segmento || null,
           limiteCredito: limiteNum,
           plazoCreditoDias: plazoNum,
@@ -512,6 +524,66 @@ export default function ClienteFormPage() {
               </div>
             </section>
 
+            {/* SECCIÓN 1B: Contacto General del Cliente */}
+            <section className="bg-zinc-900/60 border border-zinc-800 rounded-3xl p-5 space-y-4">
+              <div className="border-b border-zinc-800 pb-3">
+                <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Phone className="w-4 h-4 text-violet-400" />
+                  Contacto General del Cliente
+                </h2>
+                <p className="text-[11px] text-zinc-400 mt-0.5">
+                  Datos de contacto de la empresa. Se distinguen del contacto específico de cada sucursal.
+                </p>
+              </div>
+
+              <div className="space-y-3.5">
+                {/* Nombre Fantasía */}
+                <div>
+                  <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
+                    Nombre de Fantasía
+                  </label>
+                  <input
+                    type="text"
+                    value={nombreFantasia}
+                    onChange={(e) => setNombreFantasia(e.target.value)}
+                    placeholder="Ej: Minimarket Don Pedro"
+                    className="w-full px-3.5 py-2.5 bg-zinc-950 border border-zinc-800 focus:border-violet-500 rounded-xl text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none transition-colors"
+                  />
+                  <p className="text-[10px] text-zinc-500 mt-1">Nombre comercial con el que se conoce al cliente (opcional).</p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  {/* Teléfono del Cliente */}
+                  <div>
+                    <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
+                      Teléfono
+                    </label>
+                    <input
+                      type="tel"
+                      value={clienteTelefono}
+                      onChange={(e) => setClienteTelefono(e.target.value)}
+                      placeholder="Ej: +56 9 1234 5678"
+                      className="w-full px-3.5 py-2.5 bg-zinc-950 border border-zinc-800 focus:border-violet-500 rounded-xl text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none transition-colors"
+                    />
+                  </div>
+
+                  {/* Email del Cliente */}
+                  <div>
+                    <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
+                      Email
+                    </label>
+                    <input
+                      type="email"
+                      value={clienteEmail}
+                      onChange={(e) => setClienteEmail(e.target.value)}
+                      placeholder="Ej: contacto@empresa.cl"
+                      className="w-full px-3.5 py-2.5 bg-zinc-950 border border-zinc-800 focus:border-violet-500 rounded-xl text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none transition-colors"
+                    />
+                  </div>
+                </div>
+              </div>
+            </section>
+
             {/* SECCIÓN 2: Condiciones Comerciales y Crédito */}
             <section className="bg-zinc-900/60 border border-zinc-800 rounded-3xl p-5 space-y-4">
               <div className="border-b border-zinc-800 pb-3">
@@ -685,7 +757,7 @@ export default function ClienteFormPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                     <div>
                       <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
-                        Teléfono de Contacto
+                        Teléfono de esta Sucursal
                       </label>
                       <input
                         type="tel"
@@ -698,7 +770,7 @@ export default function ClienteFormPage() {
 
                     <div>
                       <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
-                        Email de Contacto
+                        Email de esta Sucursal
                       </label>
                       <input
                         type="email"
@@ -835,7 +907,7 @@ export default function ClienteFormPage() {
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                           <label className="block text-[11px] font-semibold text-zinc-300 mb-1">
-                            Teléfono
+                            Teléfono de esta Sucursal
                           </label>
                           <input
                             type="tel"
@@ -848,7 +920,7 @@ export default function ClienteFormPage() {
 
                         <div>
                           <label className="block text-[11px] font-semibold text-zinc-300 mb-1">
-                            Email
+                            Email de esta Sucursal
                           </label>
                           <input
                             type="email"

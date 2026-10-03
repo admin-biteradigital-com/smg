@@ -564,6 +564,9 @@ export interface ClienteAdminItem {
   id: number;
   razonSocial: string;
   rut: string;
+  nombreFantasia: string | null;
+  telefono: string | null;
+  email: string | null;
   segmento: SegmentoCliente | null;
   limiteCredito: number;
   plazoCreditoDias: number;
@@ -594,6 +597,9 @@ export interface ClienteAdminDetalle {
   id: number;
   razonSocial: string;
   rut: string;
+  nombreFantasia: string | null;
+  telefono: string | null;
+  email: string | null;
   segmento: SegmentoCliente | null;
   limiteCredito: number;
   plazoCreditoDias: number;
@@ -605,6 +611,9 @@ export interface ClienteAdminDetalle {
 export interface CreateClientePayload {
   razonSocial: string;
   rut: string;
+  nombreFantasia?: string | null;
+  telefono?: string | null;
+  email?: string | null;
   segmento?: SegmentoCliente | null;
   limiteCredito?: number;
   plazoCreditoDias?: number;
@@ -625,6 +634,9 @@ export interface CreateClientePayload {
 export interface UpdateClientePayload {
   razonSocial?: string;
   rut?: string;
+  nombreFantasia?: string | null;
+  telefono?: string | null;
+  email?: string | null;
   segmento?: SegmentoCliente | null;
   limiteCredito?: number;
   plazoCreditoDias?: number;
