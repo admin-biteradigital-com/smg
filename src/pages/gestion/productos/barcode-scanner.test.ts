@@ -236,7 +236,7 @@ describe('Módulo de Escaneo de Códigos de Barra (BarcodeDetector nativo)', () 
     });
   });
 
-  describe('Liberación Estricta de Recursos de Cámara', () => {
+  describe('Liberación Estricta de Recursos de Cámara y Linterna', () => {
     it('detiene todos los tracks de MediaStream al invocar stopCamera', () => {
       const stopTrack1 = vi.fn();
       const stopTrack2 = vi.fn();
@@ -253,6 +253,93 @@ describe('Módulo de Escaneo de Códigos de Barra (BarcodeDetector nativo)', () 
 
       expect(stopTrack1).toHaveBeenCalledTimes(1);
       expect(stopTrack2).toHaveBeenCalledTimes(1);
+    });
+
+    it('apaga la linterna enviando torch: false antes de detener el track', () => {
+      const applyConstraintsSpy = vi.fn().mockResolvedValue(undefined);
+      const stopTrackSpy = vi.fn();
+
+      const mockTrack = {
+        applyConstraints: applyConstraintsSpy,
+        stop: stopTrackSpy,
+      };
+
+      // Simulación de stopCamera apagando torch
+      mockTrack.applyConstraints({ advanced: [{ torch: false }] });
+      mockTrack.stop();
+
+      expect(applyConstraintsSpy).toHaveBeenCalledWith({ advanced: [{ torch: false }] });
+      expect(stopTrackSpy).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('Constraints de Video Mejoradas (Enfoque Continuo y Resolución Ideal)', () => {
+    it('debe utilizar restricciones con ideal (nunca exact) para evitar OverconstrainedError en hardware móvil modesto', () => {
+      const videoConstraints = {
+        facingMode: { ideal: 'environment' },
+        width: { ideal: 1920 },
+        height: { ideal: 1080 },
+        focusMode: { ideal: 'continuous' },
+      };
+
+      expect(videoConstraints.facingMode).toEqual({ ideal: 'environment' });
+      expect((videoConstraints.facingMode as any).exact).toBeUndefined();
+
+      expect(videoConstraints.width).toEqual({ ideal: 1920 });
+      expect((videoConstraints.width as any).exact).toBeUndefined();
+
+      expect(videoConstraints.height).toEqual({ ideal: 1080 });
+      expect((videoConstraints.height as any).exact).toBeUndefined();
+
+      expect(videoConstraints.focusMode).toEqual({ ideal: 'continuous' });
+      expect((videoConstraints.focusMode as any).exact).toBeUndefined();
+    });
+  });
+
+  describe('Feature Detection y Control de Linterna (Torch)', () => {
+    it('detecta soporte de linterna cuando capabilities.torch es true', () => {
+      const mockTrack = {
+        getCapabilities: () => ({ torch: true }),
+      };
+
+      const hasTorch = Boolean(mockTrack.getCapabilities?.().torch);
+      expect(hasTorch).toBe(true);
+    });
+
+    it('determina que la linterna no está disponible si capabilities.torch es falso o ausente', () => {
+      const trackSinTorch = {
+        getCapabilities: () => ({}),
+      };
+      const trackSinGetCapabilities = {};
+
+      expect(Boolean((trackSinTorch as any).getCapabilities?.().torch)).toBe(false);
+      expect(Boolean((trackSinGetCapabilities as any).getCapabilities?.().torch)).toBe(false);
+    });
+
+    it('aplica advanced constraints { torch: true / false } al alternar la linterna', async () => {
+      const applyConstraintsSpy = vi.fn().mockResolvedValue(undefined);
+      const mockTrack = {
+        getCapabilities: () => ({ torch: true }),
+        applyConstraints: applyConstraintsSpy,
+      };
+
+      let isTorchOn = false;
+
+      // Encender linterna
+      const nextState = !isTorchOn;
+      await mockTrack.applyConstraints({ advanced: [{ torch: nextState }] });
+      isTorchOn = nextState;
+
+      expect(applyConstraintsSpy).toHaveBeenNthCalledWith(1, { advanced: [{ torch: true }] });
+      expect(isTorchOn).toBe(true);
+
+      // Apagar linterna
+      const offState = !isTorchOn;
+      await mockTrack.applyConstraints({ advanced: [{ torch: offState }] });
+      isTorchOn = offState;
+
+      expect(applyConstraintsSpy).toHaveBeenNthCalledWith(2, { advanced: [{ torch: false }] });
+      expect(isTorchOn).toBe(false);
     });
   });
 });

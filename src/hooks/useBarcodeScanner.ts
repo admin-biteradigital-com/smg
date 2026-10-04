@@ -6,6 +6,31 @@ export const isBarcodeScannerSupported =
 
 export type BarcodeScanMode = 'live' | 'photo';
 
+// Tipos auxiliares explícitos para Media Capture Extensions (focusMode y torch no estándar en lib.dom.d.ts)
+export type ExtendedConstrainDOMString =
+  | string
+  | string[]
+  | { ideal?: string | string[]; exact?: string | string[] };
+
+export interface MediaTrackConstraintsExtended extends MediaTrackConstraints {
+  focusMode?: ExtendedConstrainDOMString;
+  torch?: boolean | { ideal?: boolean; exact?: boolean };
+}
+
+export interface MediaTrackCapabilitiesExtended extends MediaTrackCapabilities {
+  torch?: boolean;
+  focusMode?: string[];
+}
+
+export interface MediaStreamConstraintsExtended {
+  video?: boolean | MediaTrackConstraintsExtended;
+  audio?: boolean | MediaTrackConstraints;
+}
+
+export interface MediaStreamTrackExtended extends MediaStreamTrack {
+  getCapabilities(): MediaTrackCapabilitiesExtended;
+}
+
 export interface UseBarcodeScannerOptions {
   onScan?: (code: string, format?: string) => void;
   targetFormats?: string[];
@@ -32,6 +57,8 @@ export function useBarcodeScanner(options?: UseBarcodeScannerOptions) {
   const [photoProcessing, setPhotoProcessing] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
+  const [torchSupported, setTorchSupported] = useState(false);
+  const [isTorchOn, setIsTorchOn] = useState(false);
 
   // Referencias para manejo seguro de cámara y bucle
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -44,7 +71,7 @@ export function useBarcodeScanner(options?: UseBarcodeScannerOptions) {
     onScanRef.current = onScanCallback;
   }, [onScanCallback]);
 
-  // ─── Liberar recursos de cámara y timers ────────────────────────────────────
+  // ─── Liberar recursos de cámara, timers y linterna ─────────────────────────
   const stopCamera = useCallback(() => {
     if (scanIntervalRef.current) {
       window.clearInterval(scanIntervalRef.current);
@@ -52,6 +79,14 @@ export function useBarcodeScanner(options?: UseBarcodeScannerOptions) {
     }
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => {
+        // Apagar linterna si estaba activa antes de detener el track
+        try {
+          (track as MediaStreamTrackExtended).applyConstraints?.({
+            advanced: [{ torch: false } as any],
+          }).catch(() => {});
+        } catch {
+          // ignore
+        }
         try {
           track.stop();
         } catch {
@@ -69,6 +104,8 @@ export function useBarcodeScanner(options?: UseBarcodeScannerOptions) {
       videoRef.current.srcObject = null;
     }
     setIsScanning(false);
+    setIsTorchOn(false);
+    setTorchSupported(false);
   }, []);
 
   // ─── Instanciación segura de BarcodeDetector nativo ─────────────────────────
@@ -160,15 +197,19 @@ export function useBarcodeScanner(options?: UseBarcodeScannerOptions) {
     try {
       let stream: MediaStream;
       try {
-        // Preferir cámara trasera del dispositivo móvil
-        stream = await navigator.mediaDevices.getUserMedia({
+        // Preferir cámara trasera del dispositivo móvil con alta resolución (1080p) y autoenfoque continuo
+        const constraints: MediaStreamConstraintsExtended = {
           video: {
             facingMode: { ideal: 'environment' },
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+            focusMode: { ideal: 'continuous' },
           },
           audio: false,
-        });
+        };
+        stream = await navigator.mediaDevices.getUserMedia(
+          constraints as MediaStreamConstraints
+        );
       } catch (idealErr) {
         console.warn('[useBarcodeScanner] Fallback a cámara estándar:', idealErr);
         stream = await navigator.mediaDevices.getUserMedia({
@@ -182,6 +223,14 @@ export function useBarcodeScanner(options?: UseBarcodeScannerOptions) {
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
       }
+
+      // Detectar si el track de video soporta control de linterna (torch)
+      const videoTrack = stream.getVideoTracks()[0] as MediaStreamTrackExtended | undefined;
+      const capabilities = videoTrack?.getCapabilities?.();
+      const hasTorch = Boolean(capabilities?.torch);
+      setTorchSupported(hasTorch);
+      setIsTorchOn(false);
+
       setCameraLoading(false);
       startScanningLoop();
     } catch (err: unknown) {
@@ -253,6 +302,29 @@ export function useBarcodeScanner(options?: UseBarcodeScannerOptions) {
     setPhotoError(null);
   }, []);
 
+  // ─── Control de linterna / flash (torch) ───────────────────────────────────
+  const setTorch = useCallback(async (enabled: boolean) => {
+    if (!streamRef.current) return;
+    const videoTrack = streamRef.current.getVideoTracks()[0] as MediaStreamTrackExtended | undefined;
+    if (!videoTrack) return;
+
+    const capabilities = videoTrack.getCapabilities?.();
+    if (!capabilities?.torch) return;
+
+    try {
+      await videoTrack.applyConstraints?.({
+        advanced: [{ torch: enabled } as any],
+      });
+      setIsTorchOn(enabled);
+    } catch (err) {
+      console.warn('[useBarcodeScanner] Error al cambiar estado de linterna:', err);
+    }
+  }, []);
+
+  const toggleTorch = useCallback(async () => {
+    await setTorch(!isTorchOn);
+  }, [setTorch, isTorchOn]);
+
   // Cleanup automático al desmontar
   useEffect(() => {
     return () => {
@@ -270,6 +342,10 @@ export function useBarcodeScanner(options?: UseBarcodeScannerOptions) {
     photoProcessing,
     photoError,
     isScanning,
+    torchSupported,
+    isTorchOn,
+    toggleTorch,
+    setTorch,
     startCamera,
     stopCamera,
     processImageFile,

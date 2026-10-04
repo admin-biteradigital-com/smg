@@ -7,6 +7,8 @@ import {
   Loader2,
   RefreshCw,
   Barcode,
+  Flashlight,
+  FlashlightOff,
 } from 'lucide-react';
 import {
   useBarcodeScanner,
@@ -43,6 +45,9 @@ export default function BarcodeScannerModal({
     cameraError,
     photoProcessing,
     photoError,
+    torchSupported,
+    isTorchOn,
+    toggleTorch,
     startCamera,
     stopCamera,
     processImageFile,
@@ -169,6 +174,27 @@ export default function BarcodeScannerModal({
                 muted
                 className="w-full h-full object-cover"
               />
+
+              {/* Botón de Linterna / Flash (solo si el hardware y navegador lo soportan) */}
+              {torchSupported && !cameraLoading && !cameraError && (
+                <button
+                  type="button"
+                  onClick={toggleTorch}
+                  className={`absolute top-3 right-3 z-20 p-2.5 rounded-full backdrop-blur-md border transition-all active:scale-95 shadow-lg ${
+                    isTorchOn
+                      ? 'bg-amber-400 text-zinc-950 border-amber-300 shadow-[0_0_15px_rgba(251,191,36,0.6)]'
+                      : 'bg-black/60 text-zinc-300 border-white/20 hover:bg-black/80 hover:text-white'
+                  }`}
+                  title={isTorchOn ? 'Apagar linterna' : 'Encender linterna'}
+                  aria-label={isTorchOn ? 'Apagar linterna' : 'Encender linterna'}
+                >
+                  {isTorchOn ? (
+                    <Flashlight className="w-4 h-4 fill-zinc-950" />
+                  ) : (
+                    <FlashlightOff className="w-4 h-4" />
+                  )}
+                </button>
+              )}
 
               {/* Retículo de enfoque y escaneo */}
               {!cameraLoading && !cameraError && (
