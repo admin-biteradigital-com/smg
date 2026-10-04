@@ -35,6 +35,8 @@ import type {
   UpdateOrdenCompraPayload,
   CreatePagoProveedorPayload,
   RegistrarPagoResponse,
+  RegistrarRecepcionPayload,
+  RecepcionResponseData,
 } from '@/types';
 
 // ─── Configuration ────────────────────────────────────────────────────────────
@@ -862,5 +864,18 @@ export async function registrarPagoOrdenCompra(
   payload: CreatePagoProveedorPayload
 ): Promise<ApiResponse<RegistrarPagoResponse>> {
   return api.post<ApiResponse<RegistrarPagoResponse>>(`/api/v1/ordenes-compra/${id}/pagos`, payload);
+}
+
+// ─── ADR-020: Recepción de Mercadería ─────────────────────────────────────────
+
+/**
+ * Registra la recepción de mercadería contra una orden de compra confirmada.
+ * Endpoint: POST /api/v1/recepciones (roles: admin, deposito)
+ * Nota de contrato: usa camelCase en el body.
+ */
+export async function registrarRecepcion(
+  payload: RegistrarRecepcionPayload
+): Promise<ApiResponse<RecepcionResponseData>> {
+  return api.post<ApiResponse<RecepcionResponseData>>('/api/v1/recepciones', payload);
 }
 

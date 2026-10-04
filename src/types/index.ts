@@ -769,6 +769,9 @@ export interface LineaOrdenCompraDetalle {
   cantidad: number;
   precio_unitario_acordado: number;
   subtotal: number;
+  unidad_compra?: string | null;
+  nombre_unidad_compra?: string | null;
+  unidad_medida?: string | null;
 }
 
 export interface PagoProveedorItem {
@@ -802,6 +805,25 @@ export interface RegistrarPagoResponse {
   total_pagado: number;
   total_orden: number;
   estado_pago: OrdenCompraEstadoPago;
+}
+
+// ── ADR-020: Recepción de Mercadería (Modo Gestión) ──────────────────────────
+
+export interface ItemRecepcionInput {
+  idProducto: number;
+  cantidadRecibida: number;
+  numeroLote: string;
+  fechaVencimiento: string;
+}
+
+export interface RegistrarRecepcionPayload {
+  idOrdenCompra: number;
+  nroGuiaRemision?: string | null;
+  items: ItemRecepcionInput[];
+}
+
+export interface RecepcionResponseData {
+  id: number;
 }
 
 

@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import {
   ChevronLeft,
   ShoppingCart,
@@ -17,6 +17,7 @@ import {
   AlertTriangle,
   X,
   User,
+  PackageCheck,
 } from 'lucide-react';
 import {
   getOrdenCompraById,
@@ -45,12 +46,26 @@ export default function OrdenCompraDetallePage() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const ordenId = Number(id);
+  const location = useLocation();
 
   // Estados de datos
   const [orden, setOrden] = useState<OrdenCompraDetalle | null>(null);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [exitoMsg, setExitoMsg] = useState<string | null>(null);
+
+  // Manejar mensajes y acciones pasadas por navegación (ej: post-recepción)
+  useEffect(() => {
+    if (location.state?.exitoMsg) {
+      setExitoMsg(location.state.exitoMsg);
+    }
+    if (location.state?.abrirPago) {
+      setModalPagoOpen(true);
+    }
+    if (location.state) {
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
 
   // Modales de confirmación
   const [modalConfirmarOpen, setModalConfirmarOpen] = useState(false);
@@ -310,6 +325,16 @@ export default function OrdenCompraDetallePage() {
                 <span className="hidden sm:inline">Editar</span>
               </button>
             )}
+            {esConfirmada && (
+              <button
+                type="button"
+                onClick={() => navigate(`/gestion/compras/${orden.id}/recibir`)}
+                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 shadow-md"
+              >
+                <PackageCheck className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Recibir mercadería</span>
+              </button>
+            )}
             <button
               onClick={loadData}
               className="p-1.5 text-zinc-400 hover:text-white rounded-xl hover:bg-zinc-800 transition-colors"
@@ -352,6 +377,27 @@ export default function OrdenCompraDetallePage() {
               <X className="w-3.5 h-3.5" />
             </button>
           </div>
+        )}
+
+        {/* Banner para orden recibida al contado con pago pendiente */}
+        {orden.estado === 'recibida' &&
+          orden.condicion_pago === 'contado' &&
+          orden.estado_pago === 'pendiente' && (
+            <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-300 animate-fade-in shadow-md">
+              <div className="flex items-center gap-2.5">
+                <DollarSign className="w-4 h-4 text-amber-400 shrink-0" />
+                <span>
+                  Esta orden fue <strong>recibida</strong> con condición al <strong>contado</strong> y su pago se encuentra <strong>pendiente</strong>.
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setModalPagoOpen(true)}
+                className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-extrabold rounded-xl text-xs transition-colors shrink-0 shadow-md active:scale-95 text-center"
+              >
+                Registrar pago ahora
+              </button>
+            </div>
         )}
 
         {/* 1. Cabecera y Estados */}
@@ -456,14 +502,24 @@ export default function OrdenCompraDetallePage() {
             )}
 
             {esConfirmada && (
-              <button
-                type="button"
-                onClick={() => setModalCancelarOpen(true)}
-                className="px-4 py-2 bg-zinc-800 hover:bg-rose-900/40 text-rose-300 border border-zinc-700 hover:border-rose-700/60 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 transition-all active:scale-95"
-              >
-                <XCircle className="w-3.5 h-3.5" />
-                <span>Cancelar Orden</span>
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => navigate(`/gestion/compras/${orden.id}/recibir`)}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold inline-flex items-center gap-1.5 transition-all shadow-md active:scale-95"
+                >
+                  <PackageCheck className="w-3.5 h-3.5" />
+                  <span>Recibir mercadería</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModalCancelarOpen(true)}
+                  className="px-4 py-2 bg-zinc-800 hover:bg-rose-900/40 text-rose-300 border border-zinc-700 hover:border-rose-700/60 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 transition-all active:scale-95"
+                >
+                  <XCircle className="w-3.5 h-3.5" />
+                  <span>Cancelar Orden</span>
+                </button>
+              </>
             )}
 
             {esRecibida && (

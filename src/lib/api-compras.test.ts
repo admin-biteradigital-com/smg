@@ -8,6 +8,7 @@ import {
   confirmarOrdenCompra,
   cancelarOrdenCompra,
   registrarPagoOrdenCompra,
+  registrarRecepcion,
 } from '@/lib/api';
 
 describe('ADR-020: API Endpoints para Órdenes de Compra y Proveedores', () => {
@@ -257,6 +258,39 @@ describe('ADR-020: API Endpoints para Órdenes de Compra y Proveedores', () => {
       expect(JSON.parse(init?.body as string)).toEqual(pagoPayload);
       expect(res.data.estado_pago).toBe('pagado_parcial');
       expect(res.data.total_pagado).toBe(30000);
+    });
+  });
+
+  describe('registrarRecepcion', () => {
+    it('debe enviar POST /api/v1/recepciones con body JSON en camelCase', async () => {
+      const recepcionPayload = {
+        idOrdenCompra: 1,
+        nroGuiaRemision: 'GR-2026-9901',
+        items: [
+          {
+            idProducto: 101,
+            cantidadRecibida: 50,
+            numeroLote: 'LOT-2026-A1',
+            fechaVencimiento: '2027-10-31',
+          },
+        ],
+      };
+
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+        new Response(JSON.stringify({ data: { id: 77 } }), {
+          status: 201,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      );
+
+      const res = await registrarRecepcion(recepcionPayload);
+
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      const [url, init] = fetchSpy.mock.calls[0];
+      expect(url).toContain('/api/v1/recepciones');
+      expect(init?.method).toBe('POST');
+      expect(JSON.parse(init?.body as string)).toEqual(recepcionPayload);
+      expect(res.data.id).toBe(77);
     });
   });
 });
