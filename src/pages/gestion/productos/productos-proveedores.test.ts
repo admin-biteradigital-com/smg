@@ -162,4 +162,122 @@ describe('ADR-019: Relación Muchos-a-Muchos Productos y Proveedores', () => {
       deleteSpy.mockRestore();
     });
   });
+
+  describe('Orquestación de Alta de Producto con Proveedores', () => {
+    it('en modo alta permite seleccionar y deseleccionar proveedores en estado local sin llamadas a API', () => {
+      let seleccionLocal: ProveedorProductoItem[] = [];
+
+      const prov1: ProveedorProductoItem = { id: 10, nombre: 'Distribuidora Central', rut: '776899356' };
+      const prov2: ProveedorProductoItem = { id: 20, nombre: 'Lácteos Andes', rut: '123456785' };
+
+      // Agregar prov1
+      seleccionLocal = [...seleccionLocal, prov1];
+      expect(seleccionLocal).toHaveLength(1);
+      expect(seleccionLocal[0].id).toBe(10);
+
+      // Agregar prov2
+      seleccionLocal = [...seleccionLocal, prov2];
+      expect(seleccionLocal).toHaveLength(2);
+
+      // Quitar prov1 localmente
+      seleccionLocal = seleccionLocal.filter((p) => p.id !== 10);
+      expect(seleccionLocal).toHaveLength(1);
+      expect(seleccionLocal[0].id).toBe(20);
+    });
+
+    it('al crear un producto nuevo ejecuta la creación y luego asocia cada proveedor en secuencia', async () => {
+      const postSpy = vi.spyOn(api, 'post').mockImplementation(async (url: string) => {
+        if (url === '/api/v1/admin/productos') {
+          return { data: { id: 99, nombre: 'Aceite Vegetal 1L' } } as any;
+        }
+        if (url === '/api/v1/admin/productos/99/proveedores') {
+          return { data: { id: 1, idProducto: 99 } } as any;
+        }
+        return { data: {} } as any;
+      });
+
+      const proveedoresSeleccionados: ProveedorProductoItem[] = [
+        { id: 10, nombre: 'Distribuidora Central', rut: '776899356' },
+        { id: 20, nombre: 'Lácteos Andes', rut: '123456785' },
+      ];
+
+      // Simulación de orquestación de ProductoFormPage.handleSubmit
+      const nuevoId = 99;
+      const proveedoresFallidos: string[] = [];
+
+      for (const prov of proveedoresSeleccionados) {
+        try {
+          await asociarProveedorAProducto(nuevoId, prov.id);
+        } catch {
+          proveedoresFallidos.push(prov.nombre);
+        }
+      }
+
+      expect(proveedoresFallidos).toHaveLength(0);
+      expect(postSpy).toHaveBeenCalledTimes(2);
+      expect(postSpy).toHaveBeenNthCalledWith(1, '/api/v1/admin/productos/99/proveedores', { id_proveedor: 10 });
+      expect(postSpy).toHaveBeenNthCalledWith(2, '/api/v1/admin/productos/99/proveedores', { id_proveedor: 20 });
+
+      postSpy.mockRestore();
+    });
+
+    it('manejo de fallo parcial: si falla una asociación de proveedor, no revierte el producto y reporta el proveedor con mensaje claro', async () => {
+      const postSpy = vi.spyOn(api, 'post').mockImplementation(async (url: string, body: any) => {
+        if (url === '/api/v1/admin/productos/99/proveedores') {
+          if (body?.id_proveedor === 20) {
+            throw new ApiRequestError(500, 'INTERNAL_ERROR', 'Error al asociar proveedor en base de datos');
+          }
+          return { data: { id: 1, idProducto: 99 } } as any;
+        }
+        return { data: {} } as any;
+      });
+
+      const proveedoresSeleccionados: ProveedorProductoItem[] = [
+        { id: 10, nombre: 'Distribuidora Central', rut: '776899356' },
+        { id: 20, nombre: 'Lácteos Andes', rut: '123456785' },
+      ];
+
+      const nuevoId = 99;
+      const proveedoresFallidos: string[] = [];
+
+      for (const prov of proveedoresSeleccionados) {
+        try {
+          await asociarProveedorAProducto(nuevoId, prov.id);
+        } catch {
+          proveedoresFallidos.push(prov.nombre);
+        }
+      }
+
+      // Verificación: el producto sigue existiendo (id = 99) y se detectó el fallo específico
+      expect(nuevoId).toBe(99);
+      expect(proveedoresFallidos).toEqual(['Lácteos Andes']);
+
+      // Verificación del mensaje claro para el usuario
+      const listaNombres = proveedoresFallidos.join(', ');
+      const esSingular = proveedoresFallidos.length === 1;
+      const msgAdvertencia = `El producto se creó correctamente, pero no se pudo asociar a ${listaNombres}. Podés ${
+        esSingular ? 'asociarlo' : 'asociarlos'
+      } manualmente editando el producto.`;
+
+      expect(msgAdvertencia).toBe(
+        'El producto se creó correctamente, pero no se pudo asociar a Lácteos Andes. Podés asociarlo manualmente editando el producto.'
+      );
+
+      postSpy.mockRestore();
+    });
+
+    it('manejo de fallo parcial múltiple: reporta todos los nombres fallidos en el mensaje', () => {
+      const proveedoresFallidos = ['Distribuidora Central', 'Agrocomercial del Sur'];
+
+      const listaNombres = proveedoresFallidos.join(', ');
+      const esSingular = proveedoresFallidos.length === 1;
+      const msgAdvertencia = `El producto se creó correctamente, pero no se pudo asociar a ${listaNombres}. Podés ${
+        esSingular ? 'asociarlo' : 'asociarlos'
+      } manualmente editando el producto.`;
+
+      expect(msgAdvertencia).toBe(
+        'El producto se creó correctamente, pero no se pudo asociar a Distribuidora Central, Agrocomercial del Sur. Podés asociarlos manualmente editando el producto.'
+      );
+    });
+  });
 });

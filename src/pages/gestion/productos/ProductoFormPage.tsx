@@ -7,6 +7,7 @@ import {
   Save,
   CheckCircle2,
   AlertCircle,
+  AlertTriangle,
   Boxes,
   Globe,
   DollarSign,
@@ -47,9 +48,11 @@ export default function ProductoFormPage() {
 
   // Estados de feedback
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [advertenciaMsg, setAdvertenciaMsg] = useState<string | null>(null);
   const [exitoMsg, setExitoMsg] = useState<string | null>(null);
+  const [idProductoCreado, setIdProductoCreado] = useState<number | null>(null);
 
-  // Proveedores (ADR-019, solo modo edición)
+  // Proveedores (ADR-019)
   const [proveedoresAsociados, setProveedoresAsociados] = useState<ProveedorProductoItem[]>([]);
   const [todosProveedores, setTodosProveedores] = useState<ProveedorAdminItem[]>([]);
   const [selectedProveedorId, setSelectedProveedorId] = useState<string>('');
@@ -85,33 +88,32 @@ export default function ProductoFormPage() {
   const [activo, setActivo] = useState<number>(1);
   const [visiblePublico, setVisiblePublico] = useState<number>(0);
 
-  // Carga inicial: unidades y datos de edición si corresponde
+  // Carga inicial: unidades y catálogo de proveedores
   useEffect(() => {
     async function loadData() {
       setLoading(true);
       setErrorMsg(null);
+      setAdvertenciaMsg(null);
       try {
-        const resUnidades = await getUnidadesMedida();
+        const [resUnidades, resProv] = await Promise.all([
+          getUnidadesMedida(),
+          getProveedoresAdmin({ activo: true, pageSize: 500 }).catch((e) => {
+            console.error('[ProductoFormPage] Error al cargar proveedores:', e);
+            return { data: [] as ProveedorAdminItem[] };
+          }),
+        ]);
         const listaUnidades = resUnidades?.data || [];
         setUnidades(listaUnidades);
+        setTodosProveedores(resProv?.data || []);
 
         // Si es creación y no hay unidad base seleccionada, seleccionamos la primera disponible
         if (!isEditing && listaUnidades.length > 0) {
           setIdUnidadBase(String(listaUnidades[0].id));
         }
 
-        // Si es edición, cargar el producto y proveedores activos
+        // Si es edición, cargar el producto
         if (isEditing && id) {
-          // Se utiliza pageSize: 500 para evitar paginación compleja en este selector,
-          // dado que una distribuidora como SMG maneja un catálogo acotado de proveedores.
-          // 500 otorga un margen holgado sin riesgo de cortes silenciosos a mediano plazo.
-          const [resProd, resProv] = await Promise.all([
-            getProductoAdminById(Number(id)),
-            getProveedoresAdmin({ activo: true, pageSize: 500 }).catch((e) => {
-              console.error('[ProductoFormPage] Error al cargar proveedores:', e);
-              return { data: [] as ProveedorAdminItem[] };
-            }),
-          ]);
+          const resProd = await getProductoAdminById(Number(id));
 
           if (resProd?.data) {
             const prod = resProd.data;
@@ -152,8 +154,6 @@ export default function ProductoFormPage() {
             setVisiblePublico(prod.visiblePublico ?? 0);
             setProveedoresAsociados(prod.proveedores || []);
           }
-
-          setTodosProveedores(resProv?.data || []);
         }
       } catch (err: unknown) {
         console.error('[ProductoFormPage] Error al cargar datos iniciales:', err);
@@ -178,11 +178,25 @@ export default function ProductoFormPage() {
   );
 
   const handleAsociarProveedor = async () => {
-    if (!selectedProveedorId || !id) return;
+    if (!selectedProveedorId) return;
     const idProv = Number(selectedProveedorId);
     const provObj = todosProveedores.find((p) => p.id === idProv);
     if (!provObj) return;
 
+    // En modo alta: queda solo en estado local hasta guardar el producto
+    if (!isEditing) {
+      setProveedoresAsociados((prev) => [
+        ...prev,
+        { id: provObj.id, nombre: provObj.nombre, rut: provObj.rut },
+      ]);
+      setSelectedProveedorId('');
+      setProveedorErrorMsg(null);
+      setProveedorExitoMsg(null);
+      return;
+    }
+
+    // En modo edición: asociación inmediata en API (ADR-019)
+    if (!id) return;
     setAsociando(true);
     setProveedorErrorMsg(null);
     setProveedorExitoMsg(null);
@@ -209,7 +223,26 @@ export default function ProductoFormPage() {
     }
   };
 
+  const handleQuitarProveedorClick = (p: ProveedorProductoItem) => {
+    // En modo alta: remover directamente del estado local
+    if (!isEditing) {
+      setProveedoresAsociados((prev) => prev.filter((item) => item.id !== p.id));
+      setProveedorParaQuitar(null);
+      return;
+    }
+    // En modo edición: abrir confirmación en línea
+    setProveedorParaQuitar(p);
+    setProveedorErrorMsg(null);
+    setProveedorExitoMsg(null);
+  };
+
   const handleConfirmarQuitar = async (p: ProveedorProductoItem) => {
+    if (!isEditing) {
+      setProveedoresAsociados((prev) => prev.filter((item) => item.id !== p.id));
+      setProveedorParaQuitar(null);
+      return;
+    }
+
     if (!id) return;
     setDesasociandoId(p.id);
     setProveedorErrorMsg(null);
@@ -238,6 +271,7 @@ export default function ProductoFormPage() {
     e.preventDefault();
     setErrorMsg(null);
     setExitoMsg(null);
+    setAdvertenciaMsg(null);
 
     const cleanNombre = nombre.trim();
     if (!cleanNombre) {
@@ -279,13 +313,52 @@ export default function ProductoFormPage() {
         await updateProducto(Number(id), payload);
         setExitoMsg('Producto actualizado exitosamente.');
       } else {
+        // Paso 1: Crear producto en el backend (sin proveedores)
         const res = await createProducto(payload);
-        setExitoMsg('Producto creado exitosamente.');
-        if (res?.data?.id) {
+        const nuevoId = res?.data?.id;
+
+        if (!nuevoId) {
+          setExitoMsg('Producto creado exitosamente.');
           setTimeout(() => {
             navigate('/gestion/productos');
           }, 1000);
+          return;
         }
+
+        // Paso 2: Si hay proveedores seleccionados en modo alta, asociarlos en secuencia
+        if (proveedoresAsociados.length > 0) {
+          const proveedoresFallidos: string[] = [];
+
+          for (const prov of proveedoresAsociados) {
+            try {
+              await asociarProveedorAProducto(nuevoId, prov.id);
+            } catch (provErr: unknown) {
+              console.error(
+                `[ProductoFormPage] Error al asociar proveedor "${prov.nombre}" (${prov.id}) al nuevo producto ${nuevoId}:`,
+                provErr
+              );
+              proveedoresFallidos.push(prov.nombre);
+            }
+          }
+
+          // Paso 3: Manejo de fallos parciales
+          if (proveedoresFallidos.length > 0) {
+            setIdProductoCreado(nuevoId);
+            const listaNombres = proveedoresFallidos.join(', ');
+            const esSingular = proveedoresFallidos.length === 1;
+            const msgAdvertencia = `El producto se creó correctamente, pero no se pudo asociar a ${listaNombres}. Podés ${
+              esSingular ? 'asociarlo' : 'asociarlos'
+            } manualmente editando el producto.`;
+            setAdvertenciaMsg(msgAdvertencia);
+            return;
+          }
+        }
+
+        // Éxito completo
+        setExitoMsg('Producto creado exitosamente.');
+        setTimeout(() => {
+          navigate('/gestion/productos');
+        }, 1000);
       }
     } catch (err: unknown) {
       console.error('[ProductoFormPage] Error al guardar producto:', err);
@@ -334,11 +407,38 @@ export default function ProductoFormPage() {
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Mensajes de Alerta / Éxito */}
+            {/* Mensajes de Alerta / Advertencia / Éxito */}
             {errorMsg && (
               <div className="flex items-start gap-2.5 bg-rose-500/10 border border-rose-500/25 rounded-2xl p-4 text-xs text-rose-400 animate-fade-in">
                 <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                 <p className="leading-relaxed">{errorMsg}</p>
+              </div>
+            )}
+
+            {advertenciaMsg && (
+              <div className="flex items-start gap-3 bg-amber-500/15 border border-amber-500/30 rounded-2xl p-4 text-xs text-amber-200 font-medium animate-fade-in">
+                <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                <div className="flex-1 space-y-2.5">
+                  <p className="leading-relaxed font-medium">{advertenciaMsg}</p>
+                  {idProductoCreado && (
+                    <div className="flex flex-wrap items-center gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/gestion/productos/${idProductoCreado}`)}
+                        className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold rounded-xl text-xs transition-colors shadow-sm"
+                      >
+                        Editar producto ahora
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => navigate('/gestion/productos')}
+                        className="px-3.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-medium rounded-xl text-xs transition-colors"
+                      >
+                        Ir al catálogo
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
@@ -664,192 +764,203 @@ export default function ProductoFormPage() {
               </div>
             </section>
 
-            {/* SECCIÓN 5: Proveedores (ADR-019 - Solo visible en modo edición) */}
-            {isEditing && (
-              <section className="bg-zinc-900/60 border border-zinc-800 rounded-3xl p-5 space-y-4">
-                <div className="border-b border-zinc-800 pb-3 flex items-center justify-between">
-                  <div>
-                    <h2 className="text-sm font-bold text-white flex items-center gap-2">
-                      <Store className="w-4 h-4 text-violet-400" />
-                      Proveedores Asignados
-                    </h2>
-                    <p className="text-[11px] text-zinc-400 mt-0.5">
-                      Empresas y distribuidores que suministran este producto.
+            {/* SECCIÓN 5: Proveedores (ADR-019) */}
+            <section className="bg-zinc-900/60 border border-zinc-800 rounded-3xl p-5 space-y-4">
+              <div className="border-b border-zinc-800 pb-3 flex items-center justify-between">
+                <div>
+                  <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                    <Store className="w-4 h-4 text-violet-400" />
+                    Proveedores Asignados
+                  </h2>
+                  <p className="text-[11px] text-zinc-400 mt-0.5">
+                    Empresas y distribuidores que suministran este producto.
+                  </p>
+                </div>
+                <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-violet-500/15 border border-violet-500/30 text-violet-300">
+                  {proveedoresAsociados.length}{' '}
+                  {proveedoresAsociados.length === 1
+                    ? isEditing
+                      ? 'asociado'
+                      : 'seleccionado'
+                    : isEditing
+                    ? 'asociados'
+                    : 'seleccionados'}
+                </span>
+              </div>
+
+              {/* Mensajes de Feedback de Proveedores (solo modo edición) */}
+              {proveedorExitoMsg && (
+                <div className="flex items-center gap-2 p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-emerald-300 text-xs animate-in fade-in">
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  <span>{proveedorExitoMsg}</span>
+                </div>
+              )}
+
+              {proveedorErrorMsg && (
+                <div className="flex items-center gap-2 p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-300 text-xs animate-in fade-in">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{proveedorErrorMsg}</span>
+                </div>
+              )}
+
+              {/* Formulario para Asociar / Seleccionar Proveedor */}
+              <div className="space-y-2 pt-1">
+                <label className="block text-xs font-semibold text-zinc-300">
+                  {isEditing ? 'Asociar nuevo proveedor' : 'Seleccionar proveedor'}
+                </label>
+                <div className="flex flex-col sm:flex-row gap-2.5">
+                  <select
+                    value={selectedProveedorId}
+                    onChange={(e) => {
+                      setSelectedProveedorId(e.target.value);
+                      setProveedorErrorMsg(null);
+                    }}
+                    disabled={asociando || proveedoresDisponibles.length === 0}
+                    className="w-full sm:flex-1 px-3.5 py-2.5 bg-zinc-950 border border-zinc-800 focus:border-violet-500 rounded-xl text-xs text-zinc-100 focus:outline-none transition-colors disabled:opacity-50"
+                  >
+                    {proveedoresDisponibles.length === 0 ? (
+                      <option value="">
+                        {todosProveedores.length === 0
+                          ? 'No hay proveedores activos registrados'
+                          : 'Todos los proveedores activos ya están asociados'}
+                      </option>
+                    ) : (
+                      <>
+                        <option value="">-- Seleccionar proveedor activo --</option>
+                        {proveedoresDisponibles.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.nombre} ({formatRut(p.rut)})
+                          </option>
+                        ))}
+                      </>
+                    )}
+                  </select>
+
+                  <button
+                    type="button"
+                    onClick={handleAsociarProveedor}
+                    disabled={!selectedProveedorId || asociando}
+                    className="px-4 py-2.5 bg-violet-600 hover:bg-violet-500 disabled:opacity-40 disabled:hover:bg-violet-600 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 shrink-0 shadow-sm"
+                  >
+                    {asociando ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Asociando...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>{isEditing ? 'Asociar' : 'Agregar'}</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Lista de Proveedores Asociados / Seleccionados */}
+              <div className="space-y-2 pt-2 border-t border-zinc-800/60">
+                <div className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
+                  {isEditing
+                    ? `Proveedores vinculados (${proveedoresAsociados.length})`
+                    : `Proveedores seleccionados (${proveedoresAsociados.length})`}
+                </div>
+
+                {proveedoresAsociados.length === 0 ? (
+                  <div className="p-4 rounded-2xl border border-dashed border-zinc-800 text-center bg-zinc-950/30">
+                    <p className="text-xs text-zinc-400">
+                      {isEditing
+                        ? 'Este producto no tiene proveedores asociados.'
+                        : 'Aún no has seleccionado proveedores para este producto.'}
+                    </p>
+                    <p className="text-[11px] text-zinc-600 mt-0.5">
+                      {isEditing
+                        ? 'Selecciona un proveedor de la lista superior para vincularlo.'
+                        : 'Selecciona proveedores arriba para asociarlos automáticamente al crear el producto.'}
                     </p>
                   </div>
-                  <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-violet-500/15 border border-violet-500/30 text-violet-300">
-                    {proveedoresAsociados.length} {proveedoresAsociados.length === 1 ? 'asociado' : 'asociados'}
-                  </span>
-                </div>
+                ) : (
+                  <div className="space-y-2">
+                    {proveedoresAsociados.map((prov) => {
+                      const isConfirming = proveedorParaQuitar?.id === prov.id;
+                      const isRemoving = desasociandoId === prov.id;
 
-                {/* Mensajes de Feedback de Proveedores */}
-                {proveedorExitoMsg && (
-                  <div className="flex items-center gap-2 p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-emerald-300 text-xs animate-in fade-in">
-                    <CheckCircle2 className="w-4 h-4 shrink-0" />
-                    <span>{proveedorExitoMsg}</span>
-                  </div>
-                )}
-
-                {proveedorErrorMsg && (
-                  <div className="flex items-center gap-2 p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-300 text-xs animate-in fade-in">
-                    <AlertCircle className="w-4 h-4 shrink-0" />
-                    <span>{proveedorErrorMsg}</span>
-                  </div>
-                )}
-
-                {/* Formulario para Asociar Proveedor */}
-                <div className="space-y-2 pt-1">
-                  <label className="block text-xs font-semibold text-zinc-300">
-                    Asociar nuevo proveedor
-                  </label>
-                  <div className="flex flex-col sm:flex-row gap-2.5">
-                    <select
-                      value={selectedProveedorId}
-                      onChange={(e) => {
-                        setSelectedProveedorId(e.target.value);
-                        setProveedorErrorMsg(null);
-                      }}
-                      disabled={asociando || proveedoresDisponibles.length === 0}
-                      className="w-full sm:flex-1 px-3.5 py-2.5 bg-zinc-950 border border-zinc-800 focus:border-violet-500 rounded-xl text-xs text-zinc-100 focus:outline-none transition-colors disabled:opacity-50"
-                    >
-                      {proveedoresDisponibles.length === 0 ? (
-                        <option value="">
-                          {todosProveedores.length === 0
-                            ? 'No hay proveedores activos registrados'
-                            : 'Todos los proveedores activos ya están asociados'}
-                        </option>
-                      ) : (
-                        <>
-                          <option value="">-- Seleccionar proveedor activo --</option>
-                          {proveedoresDisponibles.map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.nombre} ({formatRut(p.rut)})
-                            </option>
-                          ))}
-                        </>
-                      )}
-                    </select>
-
-                    <button
-                      type="button"
-                      onClick={handleAsociarProveedor}
-                      disabled={!selectedProveedorId || asociando}
-                      className="px-4 py-2.5 bg-violet-600 hover:bg-violet-500 disabled:opacity-40 disabled:hover:bg-violet-600 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 shrink-0 shadow-sm"
-                    >
-                      {asociando ? (
-                        <>
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          <span>Asociando...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Plus className="w-3.5 h-3.5" />
-                          <span>Asociar</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Lista de Proveedores Asociados */}
-                <div className="space-y-2 pt-2 border-t border-zinc-800/60">
-                  <div className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
-                    Proveedores vinculados ({proveedoresAsociados.length})
-                  </div>
-
-                  {proveedoresAsociados.length === 0 ? (
-                    <div className="p-4 rounded-2xl border border-dashed border-zinc-800 text-center bg-zinc-950/30">
-                      <p className="text-xs text-zinc-400">
-                        Este producto no tiene proveedores asociados.
-                      </p>
-                      <p className="text-[11px] text-zinc-600 mt-0.5">
-                        Selecciona un proveedor de la lista superior para vincularlo.
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {proveedoresAsociados.map((prov) => {
-                        const isConfirming = proveedorParaQuitar?.id === prov.id;
-                        const isRemoving = desasociandoId === prov.id;
-
-                        return (
-                          <div
-                            key={prov.id}
-                            className={`p-3 rounded-2xl border transition-all ${
-                              isConfirming
-                                ? 'bg-rose-950/20 border-rose-500/40 ring-1 ring-rose-500/30'
-                                : 'bg-zinc-950/60 border-zinc-800 hover:border-zinc-700'
-                            }`}
-                          >
-                            {isConfirming ? (
-                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-                                <div>
-                                  <span className="text-xs font-semibold text-rose-300">
-                                    ¿Quitar asociación con este proveedor?
-                                  </span>
-                                  <p className="text-[11px] text-zinc-400 font-medium">
-                                    {prov.nombre} ({formatRut(prov.rut)})
-                                  </p>
-                                </div>
-                                <div className="flex items-center gap-2 shrink-0">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleConfirmarQuitar(prov)}
-                                    disabled={isRemoving}
-                                    className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white font-bold rounded-lg text-xs flex items-center gap-1.5 transition-all shadow-sm"
-                                  >
-                                    {isRemoving ? (
-                                      <>
-                                        <Loader2 className="w-3 h-3 animate-spin" />
-                                        <span>Quitando...</span>
-                                      </>
-                                    ) : (
-                                      <span>Confirmar</span>
-                                    )}
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => setProveedorParaQuitar(null)}
-                                    disabled={isRemoving}
-                                    className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-medium rounded-lg text-xs transition-colors"
-                                  >
-                                    Cancelar
-                                  </button>
-                                </div>
+                      return (
+                        <div
+                          key={prov.id}
+                          className={`p-3 rounded-2xl border transition-all ${
+                            isConfirming
+                              ? 'bg-rose-950/20 border-rose-500/40 ring-1 ring-rose-500/30'
+                              : 'bg-zinc-950/60 border-zinc-800 hover:border-zinc-700'
+                          }`}
+                        >
+                          {isConfirming ? (
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                              <div>
+                                <span className="text-xs font-semibold text-rose-300">
+                                  ¿Quitar asociación con este proveedor?
+                                </span>
+                                <p className="text-[11px] text-zinc-400 font-medium">
+                                  {prov.nombre} ({formatRut(prov.rut)})
+                                </p>
                               </div>
-                            ) : (
-                              <div className="flex items-center justify-between gap-3">
-                                <div className="min-w-0">
-                                  <div className="text-xs font-semibold text-zinc-200 truncate">
-                                    {prov.nombre}
-                                  </div>
-                                  <div className="text-[11px] text-zinc-400 font-mono">
-                                    {formatRut(prov.rut)}
-                                  </div>
-                                </div>
+                              <div className="flex items-center gap-2 shrink-0">
                                 <button
                                   type="button"
-                                  onClick={() => {
-                                    setProveedorParaQuitar(prov);
-                                    setProveedorErrorMsg(null);
-                                    setProveedorExitoMsg(null);
-                                  }}
-                                  className="px-2.5 py-1.5 rounded-lg text-zinc-400 hover:text-rose-400 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20 text-xs font-medium flex items-center gap-1.5 transition-all"
-                                  title="Quitar proveedor de este producto"
+                                  onClick={() => handleConfirmarQuitar(prov)}
+                                  disabled={isRemoving}
+                                  className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white font-bold rounded-lg text-xs flex items-center gap-1.5 transition-all shadow-sm"
                                 >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                  <span className="hidden sm:inline">Quitar</span>
+                                  {isRemoving ? (
+                                    <>
+                                      <Loader2 className="w-3 h-3 animate-spin" />
+                                      <span>Quitando...</span>
+                                    </>
+                                  ) : (
+                                    <span>Confirmar</span>
+                                  )}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setProveedorParaQuitar(null)}
+                                  disabled={isRemoving}
+                                  className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-medium rounded-lg text-xs transition-colors"
+                                >
+                                  Cancelar
                                 </button>
                               </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              </section>
-            )}
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="text-xs font-semibold text-zinc-200 truncate">
+                                  {prov.nombre}
+                                </div>
+                                <div className="text-[11px] text-zinc-400 font-mono">
+                                  {formatRut(prov.rut)}
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleQuitarProveedorClick(prov)}
+                                className="px-2.5 py-1.5 rounded-lg text-zinc-400 hover:text-rose-400 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20 text-xs font-medium flex items-center gap-1.5 transition-all"
+                                title={
+                                  isEditing
+                                    ? 'Quitar proveedor de este producto'
+                                    : 'Quitar de la selección'
+                                }
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                <span className="hidden sm:inline">Quitar</span>
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </section>
 
             {/* Footer Fijo con Botón Guardar */}
             <div className="fixed bottom-0 left-0 right-0 z-30 bg-zinc-950/95 backdrop-blur-md border-t border-zinc-800 px-4 py-3">
@@ -862,23 +973,33 @@ export default function ProductoFormPage() {
                   Cancelar
                 </button>
 
-                <button
-                  type="submit"
-                  disabled={guardando}
-                  className="px-6 py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50 text-white font-bold rounded-xl shadow-lg transition-all active:scale-95 text-xs flex items-center gap-2"
-                >
-                  {guardando ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Guardando...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="w-4 h-4" />
-                      {isEditing ? 'Guardar Cambios' : 'Crear Producto'}
-                    </>
-                  )}
-                </button>
+                {idProductoCreado ? (
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/gestion/productos/${idProductoCreado}`)}
+                    className="px-6 py-2.5 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold rounded-xl shadow-lg transition-all active:scale-95 text-xs flex items-center gap-2"
+                  >
+                    <span>Ir a editar producto</span>
+                  </button>
+                ) : (
+                  <button
+                    type="submit"
+                    disabled={guardando}
+                    className="px-6 py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50 text-white font-bold rounded-xl shadow-lg transition-all active:scale-95 text-xs flex items-center gap-2"
+                  >
+                    {guardando ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Guardando...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="w-4 h-4" />
+                        {isEditing ? 'Guardar Cambios' : 'Crear Producto'}
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
             </div>
           </form>
