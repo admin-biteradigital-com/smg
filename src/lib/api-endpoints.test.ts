@@ -186,6 +186,7 @@ describe('ADR-017 Lote 3: Clientes y Sucursales en Español (/clientes)', () => 
     const payload = {
       razonSocial: 'Comercial Test',
       rut: '77689935-6',
+      giro: 'Venta al por mayor',
       sucursalPrincipal: {
         nombre: 'Casa Matriz',
         direccion: 'Av Central 123',

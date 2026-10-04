@@ -7,6 +7,7 @@ import {
   Save,
   CheckCircle2,
   AlertCircle,
+  AlertTriangle,
   MapPin,
   Phone,
   Mail,
@@ -41,11 +42,15 @@ export default function ProveedorFormPage() {
   // Campos de Proveedor
   const [nombre, setNombre] = useState('');
   const [rut, setRut] = useState('');
+  const [giro, setGiro] = useState('');
   const [contacto, setContacto] = useState('');
   const [telefono, setTelefono] = useState('');
   const [email, setEmail] = useState('');
   const [direccion, setDireccion] = useState('');
   const [activo, setActivo] = useState(true);
+
+  const VALOR_GIRO_PENDIENTE = 'Pendiente de confirmar';
+  const esGiroPendiente = giro.trim() === VALOR_GIRO_PENDIENTE;
 
   // 1. Cargar datos del proveedor en modo edición
   const loadProveedorData = async () => {
@@ -58,6 +63,7 @@ export default function ProveedorFormPage() {
         const prov: ProveedorAdminItem = res.data;
         setNombre(prov.nombre || '');
         setRut(prov.rut || '');
+        setGiro(prov.giro || '');
         setContacto(prov.contacto || '');
         setTelefono(prov.telefono || '');
         setEmail(prov.email || '');
@@ -104,6 +110,7 @@ export default function ProveedorFormPage() {
 
     const cleanNombre = nombre.trim();
     const cleanRutVal = rut.trim();
+    const cleanGiro = giro.trim();
 
     if (!cleanNombre) {
       setErrorMsg('El nombre o razón social es requerido.');
@@ -120,6 +127,11 @@ export default function ProveedorFormPage() {
       return;
     }
 
+    if (!cleanGiro) {
+      setErrorMsg('El giro del proveedor es requerido.');
+      return;
+    }
+
     setGuardando(true);
 
     try {
@@ -127,6 +139,7 @@ export default function ProveedorFormPage() {
         const payload: UpdateProveedorPayload = {
           nombre: cleanNombre,
           rut: cleanRutVal,
+          giro: cleanGiro,
           contacto: contacto.trim() || null,
           telefono: telefono.trim() || null,
           email: email.trim() || null,
@@ -140,6 +153,7 @@ export default function ProveedorFormPage() {
         const payload: CreateProveedorPayload = {
           nombre: cleanNombre,
           rut: cleanRutVal,
+          giro: cleanGiro,
           contacto: contacto.trim() || null,
           telefono: telefono.trim() || null,
           email: email.trim() || null,
@@ -282,6 +296,42 @@ export default function ProveedorFormPage() {
                         : 'border-zinc-800 focus:border-emerald-500'
                     }`}
                   />
+                </div>
+
+                {/* Giro */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-semibold text-zinc-300">
+                      Giro <span className="text-emerald-400">*</span>
+                    </label>
+                    {esGiroPendiente && (
+                      <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-md flex items-center gap-1 animate-pulse">
+                        <AlertTriangle className="w-2.5 h-2.5" /> Dato provisorio
+                      </span>
+                    )}
+                  </div>
+                  <input
+                    type="text"
+                    required
+                    value={giro}
+                    onChange={(e) => setGiro(e.target.value)}
+                    placeholder="Ej: Distribución mayorista de alimentos o insumos"
+                    className={`w-full px-3.5 py-2.5 rounded-xl text-xs placeholder-zinc-600 focus:outline-none transition-colors border ${
+                      esGiroPendiente
+                        ? 'bg-amber-950/20 border-amber-500/60 text-amber-200 focus:border-amber-400 focus:ring-1 focus:ring-amber-400/40'
+                        : 'bg-zinc-950 border-zinc-800 text-zinc-100 focus:border-emerald-500'
+                    }`}
+                  />
+                  {esGiroPendiente ? (
+                    <div className="flex items-center gap-1.5 mt-1.5 text-xs text-amber-400 font-medium">
+                      <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                      <span>Este dato es provisorio, confirmalo con el giro tributario real.</span>
+                    </div>
+                  ) : (
+                    <p className="text-[10px] text-zinc-500 mt-1">
+                      Actividad económica del proveedor — requerida para compras y facturación.
+                    </p>
+                  )}
                 </div>
               </div>
             </section>

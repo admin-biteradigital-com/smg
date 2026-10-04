@@ -614,7 +614,7 @@ export interface CreateClientePayload {
   razonSocial: string;
   rut: string;
   nombreFantasia?: string | null;
-  giro?: string | null;
+  giro: string;
   telefono?: string | null;
   email?: string | null;
   segmento?: SegmentoCliente | null;
@@ -682,6 +682,7 @@ export interface ProveedorAdminItem {
   idAbonado: number;
   nombre: string;
   rut: string;
+  giro?: string | null;
   contacto: string | null;
   telefono: string | null;
   email: string | null;
@@ -693,6 +694,7 @@ export interface ProveedorAdminItem {
 export interface CreateProveedorPayload {
   nombre: string;
   rut: string;
+  giro: string;
   contacto?: string | null;
   telefono?: string | null;
   email?: string | null;
@@ -702,6 +704,7 @@ export interface CreateProveedorPayload {
 export interface UpdateProveedorPayload {
   nombre?: string;
   rut?: string;
+  giro?: string;
   contacto?: string | null;
   telefono?: string | null;
   email?: string | null;

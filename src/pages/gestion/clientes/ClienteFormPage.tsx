@@ -16,6 +16,7 @@ import {
   Phone,
   Mail,
   X,
+  AlertTriangle,
 } from 'lucide-react';
 import {
   getClienteById,
@@ -62,6 +63,9 @@ export default function ClienteFormPage() {
   const [nombreFantasia, setNombreFantasia] = useState('');
   const [giro, setGiro] = useState('');
   const [clienteTelefono, setClienteTelefono] = useState('');
+
+  const VALOR_GIRO_PENDIENTE = 'Pendiente de confirmar';
+  const esGiroPendiente = giro.trim() === VALOR_GIRO_PENDIENTE;
   const [clienteEmail, setClienteEmail] = useState('');
   const [segmento, setSegmento] = useState<SegmentoCliente | ''>('');
   const [limiteCredito, setLimiteCredito] = useState<string>('0');
@@ -161,6 +165,7 @@ export default function ClienteFormPage() {
 
     const cleanRazonSocial = razonSocial.trim();
     const cleanRutVal = rut.trim();
+    const cleanGiro = giro.trim();
 
     if (!cleanRazonSocial) {
       setErrorMsg('La razón social es requerida.');
@@ -169,6 +174,11 @@ export default function ClienteFormPage() {
 
     if (!cleanRutVal) {
       setErrorMsg('El RUT es requerido.');
+      return;
+    }
+
+    if (!cleanGiro) {
+      setErrorMsg('El giro del cliente es requerido.');
       return;
     }
 
@@ -186,7 +196,7 @@ export default function ClienteFormPage() {
           razonSocial: cleanRazonSocial,
           rut: cleanRutVal,
           nombreFantasia: nombreFantasia.trim() || null,
-          giro: giro.trim() || null,
+          giro: cleanGiro,
           telefono: clienteTelefono.trim() || null,
           email: clienteEmail.trim() || null,
           segmento: segmento || null,
@@ -217,7 +227,7 @@ export default function ClienteFormPage() {
           razonSocial: cleanRazonSocial,
           rut: cleanRutVal,
           nombreFantasia: nombreFantasia.trim() || null,
-          giro: giro.trim() || null,
+          giro: cleanGiro,
           telefono: clienteTelefono.trim() || null,
           email: clienteEmail.trim() || null,
           segmento: segmento || null,
@@ -558,17 +568,38 @@ export default function ClienteFormPage() {
 
                 {/* Giro */}
                 <div>
-                  <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
-                    Giro
-                  </label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-semibold text-zinc-300">
+                      Giro <span className="text-blue-400">*</span>
+                    </label>
+                    {esGiroPendiente && (
+                      <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-md flex items-center gap-1 animate-pulse">
+                        <AlertTriangle className="w-2.5 h-2.5" /> Dato provisorio
+                      </span>
+                    )}
+                  </div>
                   <input
                     type="text"
+                    required
                     value={giro}
                     onChange={(e) => setGiro(e.target.value)}
                     placeholder="Ej: Venta al por menor de alimentos y bebidas"
-                    className="w-full px-3.5 py-2.5 bg-zinc-950 border border-zinc-800 focus:border-violet-500 rounded-xl text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none transition-colors"
+                    className={`w-full px-3.5 py-2.5 rounded-xl text-xs placeholder-zinc-600 focus:outline-none transition-colors border ${
+                      esGiroPendiente
+                        ? 'bg-amber-950/20 border-amber-500/60 text-amber-200 focus:border-amber-400 focus:ring-1 focus:ring-amber-400/40'
+                        : 'bg-zinc-950 border-zinc-800 text-zinc-100 focus:border-violet-500'
+                    }`}
                   />
-                  <p className="text-[10px] text-zinc-500 mt-1">Actividad económica del cliente — requerido para facturación electrónica.</p>
+                  {esGiroPendiente ? (
+                    <div className="flex items-center gap-1.5 mt-1.5 text-xs text-amber-400 font-medium">
+                      <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                      <span>Este dato es provisorio, confirmalo con el giro tributario real.</span>
+                    </div>
+                  ) : (
+                    <p className="text-[10px] text-zinc-500 mt-1">
+                      Actividad económica del cliente — requerido para facturación electrónica.
+                    </p>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">

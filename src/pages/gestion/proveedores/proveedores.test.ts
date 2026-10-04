@@ -63,4 +63,33 @@ describe('ABM de Proveedores - Lógica de Validación y Errores', () => {
       expect(msg).toBe(backendMessage);
     });
   });
+
+  describe('Campo Giro Obligatorio y Detección de Dato Provisorio', () => {
+    const VALOR_GIRO_PENDIENTE = 'Pendiente de confirmar';
+
+    it('debe rechazar giros vacíos o que solo contienen espacios en blanco', () => {
+      const validarGiro = (val: string) => {
+        const cleanGiro = val.trim();
+        if (!cleanGiro) {
+          return 'El giro del proveedor es requerido.';
+        }
+        return null;
+      };
+
+      expect(validarGiro('')).toBe('El giro del proveedor es requerido.');
+      expect(validarGiro('   ')).toBe('El giro del proveedor es requerido.');
+      expect(validarGiro('Distribuidora de Alimentos SpA')).toBeNull();
+      expect(validarGiro(VALOR_GIRO_PENDIENTE)).toBeNull();
+    });
+
+    it('debe detectar correctamente el valor provisorio "Pendiente de confirmar"', () => {
+      const esGiroProvisorio = (val: string) => val.trim() === VALOR_GIRO_PENDIENTE;
+
+      expect(esGiroProvisorio('Pendiente de confirmar')).toBe(true);
+      expect(esGiroProvisorio('  Pendiente de confirmar  ')).toBe(true);
+      expect(esGiroProvisorio('Venta al por mayor de abarrotes')).toBe(false);
+      expect(esGiroProvisorio('')).toBe(false);
+    });
+  });
 });
+
