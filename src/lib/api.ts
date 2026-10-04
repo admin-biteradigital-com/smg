@@ -29,6 +29,12 @@ import type {
   CreateProveedorPayload,
   UpdateProveedorPayload,
   AsociarProveedorResponse,
+  OrdenCompraItem,
+  OrdenCompraDetalle,
+  CreateOrdenCompraPayload,
+  UpdateOrdenCompraPayload,
+  CreatePagoProveedorPayload,
+  RegistrarPagoResponse,
 } from '@/types';
 
 // ─── Configuration ────────────────────────────────────────────────────────────
@@ -531,12 +537,21 @@ export async function getUnidadesMedida(): Promise<ApiResponse<UnidadMedidaItem[
 }
 
 /**
- * Obtiene el listado de productos en modo gestión con filtro opcional por activo.
+ * Obtiene el listado de productos en modo gestión con filtro opcional por activo y por id_proveedor.
  */
 export async function getProductosAdmin(
-  activo?: 0 | 1
+  filtersOrActivo?: (0 | 1) | { activo?: 0 | 1; id_proveedor?: number },
+  idProveedor?: number
 ): Promise<ApiResponse<ProductoAdminItem[]>> {
-  const query = activo !== undefined ? `?activo=${activo}` : '';
+  const params = new URLSearchParams();
+  if (typeof filtersOrActivo === 'object' && filtersOrActivo !== null) {
+    if (filtersOrActivo.activo !== undefined) params.set('activo', String(filtersOrActivo.activo));
+    if (filtersOrActivo.id_proveedor !== undefined) params.set('id_proveedor', String(filtersOrActivo.id_proveedor));
+  } else {
+    if (filtersOrActivo !== undefined) params.set('activo', String(filtersOrActivo));
+    if (idProveedor !== undefined) params.set('id_proveedor', String(idProveedor));
+  }
+  const query = params.toString() ? `?${params.toString()}` : '';
   return api.get<ApiResponse<ProductoAdminItem[]>>(`/api/v1/admin/productos${query}`);
 }
 
@@ -776,5 +791,76 @@ export async function ajustarStockDeposito(payload: {
     '/api/v1/stock-deposito/ajustes',
     payload
   );
+}
+
+// ─── ADR-020: Órdenes de Compra (Modo Gestión) ───────────────────────────────
+
+/**
+ * Obtiene el listado de órdenes de compra con filtros opcionales (estado, id_proveedor).
+ */
+export async function getOrdenesCompra(
+  filters?: { estado?: string; id_proveedor?: number }
+): Promise<ApiResponse<OrdenCompraItem[]>> {
+  const params = new URLSearchParams();
+  if (filters?.estado) params.set('estado', filters.estado);
+  if (filters?.id_proveedor) params.set('id_proveedor', String(filters.id_proveedor));
+  const query = params.toString() ? `?${params.toString()}` : '';
+  return api.get<ApiResponse<OrdenCompraItem[]>>(`/api/v1/ordenes-compra${query}`);
+}
+
+/**
+ * Obtiene el detalle completo de una orden de compra por ID (incluye líneas y pagos).
+ */
+export async function getOrdenCompraById(
+  id: number
+): Promise<ApiResponse<OrdenCompraDetalle>> {
+  return api.get<ApiResponse<OrdenCompraDetalle>>(`/api/v1/ordenes-compra/${id}`);
+}
+
+/**
+ * Crea una orden de compra nueva en estado 'borrador'.
+ */
+export async function createOrdenCompra(
+  payload: CreateOrdenCompraPayload
+): Promise<ApiResponse<OrdenCompraDetalle>> {
+  return api.post<ApiResponse<OrdenCompraDetalle>>('/api/v1/ordenes-compra', payload);
+}
+
+/**
+ * Actualiza una orden de compra en estado 'borrador'.
+ */
+export async function updateOrdenCompra(
+  id: number,
+  payload: UpdateOrdenCompraPayload
+): Promise<ApiResponse<OrdenCompraDetalle>> {
+  return api.patch<ApiResponse<OrdenCompraDetalle>>(`/api/v1/ordenes-compra/${id}`, payload);
+}
+
+/**
+ * Confirma una orden de compra ('borrador' -> 'confirmada').
+ */
+export async function confirmarOrdenCompra(
+  id: number
+): Promise<ApiResponse<OrdenCompraDetalle>> {
+  return api.patch<ApiResponse<OrdenCompraDetalle>>(`/api/v1/ordenes-compra/${id}/confirmar`, {});
+}
+
+/**
+ * Cancela una orden de compra ('borrador' o 'confirmada' -> 'cancelada').
+ */
+export async function cancelarOrdenCompra(
+  id: number
+): Promise<ApiResponse<OrdenCompraDetalle>> {
+  return api.patch<ApiResponse<OrdenCompraDetalle>>(`/api/v1/ordenes-compra/${id}/cancelar`, {});
+}
+
+/**
+ * Registra un pago sobre una orden de compra confirmada o recibida.
+ */
+export async function registrarPagoOrdenCompra(
+  id: number,
+  payload: CreatePagoProveedorPayload
+): Promise<ApiResponse<RegistrarPagoResponse>> {
+  return api.post<ApiResponse<RegistrarPagoResponse>>(`/api/v1/ordenes-compra/${id}/pagos`, payload);
 }
 

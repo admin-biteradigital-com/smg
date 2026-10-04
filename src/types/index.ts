@@ -712,3 +712,96 @@ export interface UpdateProveedorPayload {
   activo?: boolean;
 }
 
+// ── ADR-020: Órdenes de Compra (Modo Gestión) ─────────────────────────────────
+
+export type OrdenCompraEstado = 'borrador' | 'confirmada' | 'recibida' | 'cancelada';
+export type OrdenCompraCondicionPago = 'contado' | 'credito';
+export type OrdenCompraEstadoPago = 'pendiente' | 'pagado_parcial' | 'pagado';
+
+export interface LineaOrdenCompraInput {
+  id_producto: number;
+  cantidad: number;
+  precio_unitario_acordado: number;
+}
+
+export interface CreateOrdenCompraPayload {
+  id_proveedor: number;
+  fecha_entrega_estimada?: string | null;
+  condicion_pago: OrdenCompraCondicionPago;
+  fecha_vencimiento_pago?: string | null;
+  notas?: string | null;
+  lineas: LineaOrdenCompraInput[];
+}
+
+export interface UpdateOrdenCompraPayload {
+  id_proveedor?: number;
+  fecha_entrega_estimada?: string | null;
+  condicion_pago?: OrdenCompraCondicionPago;
+  fecha_vencimiento_pago?: string | null;
+  notas?: string | null;
+  lineas?: LineaOrdenCompraInput[];
+}
+
+export interface OrdenCompraItem {
+  id: number;
+  id_abonado?: number;
+  id_proveedor: number;
+  proveedor_nombre?: string | null;
+  proveedor_rut?: string | null;
+  fecha_creacion: string;
+  fecha_entrega_estimada: string | null;
+  estado: OrdenCompraEstado;
+  fecha_confirmacion_proveedor: string | null;
+  notas_proveedor?: string | null;
+  total: number;
+  notas: string | null;
+  condicion_pago: OrdenCompraCondicionPago | null;
+  fecha_vencimiento_pago: string | null;
+  estado_pago: OrdenCompraEstadoPago;
+}
+
+export interface LineaOrdenCompraDetalle {
+  id: number;
+  id_orden: number;
+  id_producto: number;
+  producto_nombre?: string | null;
+  producto_codigo?: string | null;
+  cantidad: number;
+  precio_unitario_acordado: number;
+  subtotal: number;
+}
+
+export interface PagoProveedorItem {
+  id: number;
+  id_orden_compra: number;
+  monto: number;
+  fecha_pago: string;
+  metodo: string | null;
+  registrado_por: string;
+  creado_en: string;
+}
+
+export interface OrdenCompraDetalle extends OrdenCompraItem {
+  lineas: LineaOrdenCompraDetalle[];
+  pagos: PagoProveedorItem[];
+}
+
+export interface CreatePagoProveedorPayload {
+  monto: number;
+  fecha_pago: string;
+  metodo?: string | null;
+  registrado_por?: string | null;
+}
+
+export interface RegistrarPagoResponse {
+  id_orden_compra: number;
+  monto: number;
+  fecha_pago: string;
+  metodo?: string | null;
+  registrado_por: string;
+  total_pagado: number;
+  total_orden: number;
+  estado_pago: OrdenCompraEstadoPago;
+}
+
+
