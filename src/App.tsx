@@ -157,10 +157,12 @@ export default function App() {
           <Route
             element={
               <ProtectedRoute allowedRoles={['admin']}>
-                <Suspense fallback={<LoadingFallback />}>
-                  <GestionUpdateToast />
-                  <Outlet />
-                </Suspense>
+                <ChunkErrorBoundary returnPath="/gestion" returnLabel="Volver al inicio">
+                  <Suspense fallback={<LoadingFallback />}>
+                    <GestionUpdateToast />
+                    <Outlet />
+                  </Suspense>
+                </ChunkErrorBoundary>
               </ProtectedRoute>
             }
           >

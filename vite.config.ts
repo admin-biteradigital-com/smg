@@ -3,8 +3,26 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import path from 'path';
+import { execSync } from 'child_process';
+
+// ── ADR-018: Build ID para diagnóstico en pantallas de error ──────────────────
+let buildId = 'dev';
+try {
+  const commitSha = process.env.CF_PAGES_COMMIT_SHA;
+  if (commitSha) {
+    buildId = `${commitSha.slice(0, 7)} ${new Date().toISOString().slice(0, 10)}`;
+  } else {
+    const commitShort = execSync('git rev-parse --short HEAD').toString().trim();
+    buildId = `${commitShort} ${new Date().toISOString().slice(0, 10)}`;
+  }
+} catch {
+  buildId = `local ${new Date().toISOString().slice(0, 10)}`;
+}
 
 export default defineConfig({
+  define: {
+    __BUILD_ID__: JSON.stringify(buildId),
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

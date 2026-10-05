@@ -19,7 +19,8 @@ export interface UpdateContextType {
   checkForUpdate: () => Promise<void>;
 }
 
-const UpdateContext = createContext<UpdateContextType | undefined>(undefined);
+// Exportado para uso con static contextType en componentes de clase (ChunkErrorBoundary)
+export const UpdateContext = createContext<UpdateContextType | undefined>(undefined);
 
 // Intervalo de comprobación: 15 minutos en primer plano (ms)
 const CHECK_INTERVAL_MS = 15 * 60 * 1000;

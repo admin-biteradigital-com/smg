@@ -295,6 +295,10 @@ export default function GestionHomePage() {
           <ChevronLeft className="w-4 h-4" />
           Volver al Inicio
         </button>
+        {/* ADR-018: Build ID para diagnóstico remoto */}
+        <p className="text-[9px] text-zinc-700 text-center mt-3 select-all font-mono">
+          {typeof __BUILD_ID__ !== 'undefined' ? __BUILD_ID__ : ''}
+        </p>
       </div>
     </div>
   );
