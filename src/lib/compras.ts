@@ -2,6 +2,7 @@ import type {
   OrdenCompraEstado,
   OrdenCompraEstadoPago,
   OrdenCompraCondicionPago,
+  ProveedorProductoItem,
 } from '@/types';
 
 // ─── Días Hábiles ─────────────────────────────────────────────────────────────
@@ -88,9 +89,10 @@ export function esPagoVencido(
   if (orden.estado === 'cancelada') return false;
   if (orden.condicion_pago !== 'credito') return false;
   if (orden.estado_pago === 'pagado') return false;
-  if (!orden.fecha_vencimiento_pago) return false;
+  if (!orden.fecha_vencimiento_pago || !orden.fecha_vencimiento_pago.trim()) return false;
 
   const fechaVenc = orden.fecha_vencimiento_pago.split('T')[0].split(' ')[0];
+  if (!fechaVenc) return false;
   return fechaVenc < fechaReferencia;
 }
 
@@ -121,18 +123,13 @@ export interface ValidacionCondicionPagoResult {
 
 /**
  * Valida la coherencia de la condición de pago y su fecha de vencimiento.
+ * Para 'credito', ya no se exige fecha de vencimiento al crear o editar.
  */
 export function validarCondicionPago(
   condicionPago: OrdenCompraCondicionPago,
   fechaVencimiento?: string | null
 ): ValidacionCondicionPagoResult {
   if (condicionPago === 'credito') {
-    if (!fechaVencimiento || fechaVencimiento.trim() === '') {
-      return {
-        valido: false,
-        error: 'La fecha de vencimiento es obligatoria cuando la condición es a crédito.',
-      };
-    }
     return { valido: true };
   }
 
@@ -147,6 +144,79 @@ export function validarCondicionPago(
   }
 
   return { valido: true };
+}
+
+/**
+ * Calcula el costo inicial por unidad de compra al agregar un producto a la orden de compra.
+ * - Si el producto no tiene costo (null, undefined o <= 0), retorna null (campo queda vacío).
+ * - Si tiene costo, multiplica precioCosto x factorConversion (factor 1 si no hay).
+ */
+export function calcularCostoInicialCompra(
+  precioCosto?: number | null,
+  factorConversion?: number | null
+): number | null {
+  if (precioCosto === null || precioCosto === undefined || precioCosto <= 0) {
+    return null;
+  }
+  const factor = factorConversion && factorConversion > 1 ? factorConversion : 1;
+  return Math.round(precioCosto * factor);
+}
+
+/**
+ * Formatea el texto de costo derivado y equivalencia por unidad bajo la línea:
+ * "= 120 display (24 por caja) · $100 c/u" (o "≈ $X c/u" si no es exacto).
+ */
+export function formatearDetalleEquivalenciaLinea(params: {
+  cantidad: number;
+  costoPorUnidadCompra: number;
+  factorConversion: number;
+  nombreUnidadBase: string;
+  nombreUnidadCompra: string;
+}): string | null {
+  const { cantidad, costoPorUnidadCompra, factorConversion, nombreUnidadBase, nombreUnidadCompra } = params;
+  if (!factorConversion || factorConversion <= 1) return null;
+  if (cantidad <= 0 || isNaN(cantidad)) return null;
+
+  const totalBase = cantidad * factorConversion;
+  const costoBaseExacto = costoPorUnidadCompra > 0 ? costoPorUnidadCompra / factorConversion : 0;
+  const esExacto = Number.isInteger(costoBaseExacto);
+  const costoBaseRedondeado = Math.round(costoBaseExacto);
+  const prefijoPrecio = esExacto ? '$' : '≈ $';
+
+  return `= ${totalBase} ${nombreUnidadBase} (${factorConversion} por ${nombreUnidadCompra}) · ${prefijoPrecio}${costoBaseRedondeado.toLocaleString('es-CL')} c/u`;
+}
+
+export type DecisionProveedoresProducto =
+  | { accion: 'sin_proveedores'; mensaje: string }
+  | { accion: 'un_proveedor'; proveedor: ProveedorProductoItem }
+  | { accion: 'multiples_proveedores'; proveedores: ProveedorProductoItem[] };
+
+/**
+ * Resuelve la acción a tomar según la cantidad de proveedores asociados al producto:
+ * - 0: aviso y no agregar
+ * - 1: asignar proveedor y agregar
+ * - 2+: modal de selección sin opción preseleccionada
+ */
+export function resolverSeleccionProveedor(
+  proveedores?: ProveedorProductoItem[] | null
+): DecisionProveedoresProducto {
+  const lista = proveedores || [];
+  if (lista.length === 0) {
+    return {
+      accion: 'sin_proveedores',
+      mensaje: 'Este producto no tiene proveedores asociados. Asocialo desde el producto.',
+    };
+  }
+  if (lista.length === 1) {
+    return {
+      accion: 'un_proveedor',
+      proveedor: lista[0],
+    };
+  }
+  return {
+    accion: 'multiples_proveedores',
+    proveedores: lista,
+  };
 }
 
 // ─── Formateo de Fechas (compatible con SQLite y formato ISO) ─────────────────

@@ -748,6 +748,10 @@ export interface UpdateOrdenCompraPayload {
   lineas?: LineaOrdenCompraInput[];
 }
 
+export interface PatchVencimientoPagoPayload {
+  fecha_vencimiento_pago: string | null;
+}
+
 export interface OrdenCompraItem {
   id: number;
   id_abonado?: number;

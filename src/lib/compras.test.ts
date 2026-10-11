@@ -8,6 +8,9 @@ import {
   formatFecha,
   formatFechaHora,
   formatCLP,
+  calcularCostoInicialCompra,
+  formatearDetalleEquivalenciaLinea,
+  resolverSeleccionProveedor,
 } from './compras';
 
 describe('ADR-020: Módulo Compras — Lógica Pura', () => {
@@ -121,6 +124,35 @@ describe('ADR-020: Módulo Compras — Lógica Pura', () => {
       };
       expect(esPagoVencido(orden, hoy)).toBe(false);
     });
+
+    it('tolera fecha_vencimiento_pago nula, undefined o vacía sin marcar vencido', () => {
+      expect(
+        esPagoVencido({
+          condicion_pago: 'credito',
+          fecha_vencimiento_pago: null,
+          estado_pago: 'pendiente',
+          estado: 'confirmada',
+        }, hoy)
+      ).toBe(false);
+
+      expect(
+        esPagoVencido({
+          condicion_pago: 'credito',
+          fecha_vencimiento_pago: undefined,
+          estado_pago: 'pendiente',
+          estado: 'confirmada',
+        }, hoy)
+      ).toBe(false);
+
+      expect(
+        esPagoVencido({
+          condicion_pago: 'credito',
+          fecha_vencimiento_pago: '',
+          estado_pago: 'pendiente',
+          estado: 'confirmada',
+        }, hoy)
+      ).toBe(false);
+    });
   });
 
   describe('esEntregaDemorada', () => {
@@ -175,10 +207,11 @@ describe('ADR-020: Módulo Compras — Lógica Pura', () => {
   });
 
   describe('validarCondicionPago', () => {
-    it('debe rechazar credito sin fecha de vencimiento', () => {
-      expect(validarCondicionPago('credito', null).valido).toBe(false);
-      expect(validarCondicionPago('credito', '').valido).toBe(false);
-      expect(validarCondicionPago('credito', '   ').valido).toBe(false);
+    it('debe aceptar credito sin fecha de vencimiento (nula, vacía o undefined)', () => {
+      expect(validarCondicionPago('credito', null).valido).toBe(true);
+      expect(validarCondicionPago('credito', '').valido).toBe(true);
+      expect(validarCondicionPago('credito', undefined).valido).toBe(true);
+      expect(validarCondicionPago('credito', '   ').valido).toBe(true);
     });
 
     it('debe aceptar credito con fecha de vencimiento valida', () => {
@@ -193,6 +226,104 @@ describe('ADR-020: Módulo Compras — Lógica Pura', () => {
 
     it('debe rechazar contado con fecha de vencimiento asignada', () => {
       expect(validarCondicionPago('contado', '2026-10-25').valido).toBe(false);
+    });
+  });
+
+  describe('calcularCostoInicialCompra', () => {
+    it('retorna null si el producto no tiene costo (null, undefined, 0 o negativo)', () => {
+      expect(calcularCostoInicialCompra(null, 24)).toBeNull();
+      expect(calcularCostoInicialCompra(undefined, 24)).toBeNull();
+      expect(calcularCostoInicialCompra(0, 24)).toBeNull();
+      expect(calcularCostoInicialCompra(-100, 24)).toBeNull();
+    });
+
+    it('calcula precioCosto x factor cuando hay factor > 1', () => {
+      // $100 costo unitario base x factor 24 = $2.400 por caja
+      expect(calcularCostoInicialCompra(100, 24)).toBe(2400);
+      expect(calcularCostoInicialCompra(50, 10)).toBe(500);
+    });
+
+    it('calcula precioCosto x 1 cuando no hay factor o factor es 1', () => {
+      expect(calcularCostoInicialCompra(1500, 1)).toBe(1500);
+      expect(calcularCostoInicialCompra(1500, null)).toBe(1500);
+      expect(calcularCostoInicialCompra(1500, undefined)).toBe(1500);
+    });
+  });
+
+  describe('formatearDetalleEquivalenciaLinea', () => {
+    it('muestra costo derivado exacto con signo $', () => {
+      // 5 cajas x 24 = 120 display; $2.400 / 24 = $100 exacto
+      const res = formatearDetalleEquivalenciaLinea({
+        cantidad: 5,
+        costoPorUnidadCompra: 2400,
+        factorConversion: 24,
+        nombreUnidadBase: 'display',
+        nombreUnidadCompra: 'caja',
+      });
+      expect(res).toBe('= 120 display (24 por caja) · $100 c/u');
+    });
+
+    it('muestra costo derivado no exacto con signo ≈ $ y redondeado', () => {
+      // 5 cajas x 24 = 120 display; $2.500 / 24 = 104.1666... -> ≈ $104
+      const res = formatearDetalleEquivalenciaLinea({
+        cantidad: 5,
+        costoPorUnidadCompra: 2500,
+        factorConversion: 24,
+        nombreUnidadBase: 'display',
+        nombreUnidadCompra: 'caja',
+      });
+      expect(res).toBe('= 120 display (24 por caja) · ≈ $104 c/u');
+    });
+
+    it('retorna null cuando factorConversion <= 1 o cantidad <= 0', () => {
+      expect(
+        formatearDetalleEquivalenciaLinea({
+          cantidad: 5,
+          costoPorUnidadCompra: 1000,
+          factorConversion: 1,
+          nombreUnidadBase: 'unidad',
+          nombreUnidadCompra: 'unidad',
+        })
+      ).toBeNull();
+
+      expect(
+        formatearDetalleEquivalenciaLinea({
+          cantidad: 0,
+          costoPorUnidadCompra: 2400,
+          factorConversion: 24,
+          nombreUnidadBase: 'display',
+          nombreUnidadCompra: 'caja',
+        })
+      ).toBeNull();
+    });
+  });
+
+  describe('resolverSeleccionProveedor', () => {
+    it('0 proveedores: retorna acción sin_proveedores con aviso descriptivo', () => {
+      const res = resolverSeleccionProveedor([]);
+      expect(res.accion).toBe('sin_proveedores');
+      if (res.accion === 'sin_proveedores') {
+        expect(res.mensaje).toBe('Este producto no tiene proveedores asociados. Asocialo desde el producto.');
+      }
+    });
+
+    it('1 proveedor: retorna acción un_proveedor con el proveedor asignado', () => {
+      const prov = { id: 10, nombre: 'Distribuidora Central', rut: '776899356' };
+      const res = resolverSeleccionProveedor([prov]);
+      expect(res.accion).toBe('un_proveedor');
+      if (res.accion === 'un_proveedor') {
+        expect(res.proveedor).toEqual(prov);
+      }
+    });
+
+    it('2 o más proveedores: retorna acción multiples_proveedores para mostrar modal', () => {
+      const p1 = { id: 10, nombre: 'Distribuidora Central', rut: '776899356' };
+      const p2 = { id: 20, nombre: 'Agrocomercial Sur', rut: '76507455K' };
+      const res = resolverSeleccionProveedor([p1, p2]);
+      expect(res.accion).toBe('multiples_proveedores');
+      if (res.accion === 'multiples_proveedores') {
+        expect(res.proveedores).toHaveLength(2);
+      }
     });
   });
 

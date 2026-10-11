@@ -24,6 +24,7 @@ import {
   confirmarOrdenCompra,
   cancelarOrdenCompra,
   registrarPagoOrdenCompra,
+  patchVencimientoPagoOrdenCompra,
   ApiRequestError,
 } from '@/lib/api';
 import {
@@ -80,6 +81,12 @@ export default function OrdenCompraDetallePage() {
   const [pagoConfirmarExceso, setPagoConfirmarExceso] = useState(false);
   const [ejecutandoPago, setEjecutandoPago] = useState(false);
   const [errorPagoMsg, setErrorPagoMsg] = useState<string | null>(null);
+
+  // Modal de vencimiento de pago
+  const [modalVencimientoOpen, setModalVencimientoOpen] = useState(false);
+  const [nuevoVencimiento, setNuevoVencimiento] = useState('');
+  const [guardandoVencimiento, setGuardandoVencimiento] = useState(false);
+  const [errorVencimientoMsg, setErrorVencimientoMsg] = useState<string | null>(null);
 
   // Carga inicial y recarga del detalle
   const loadData = useCallback(async () => {
@@ -459,9 +466,11 @@ export default function OrdenCompraDetallePage() {
               <span className="text-[11px] text-zinc-400">Condición de Pago</span>
               <p className="font-semibold text-zinc-200 capitalize">
                 {orden.condicion_pago || 'contado'}
-                {orden.condicion_pago === 'credito' && orden.fecha_vencimiento_pago && (
+                {orden.condicion_pago === 'credito' && (
                   <span className="block text-[11px] text-zinc-400 font-normal">
-                    Vencimiento: {formatFecha(orden.fecha_vencimiento_pago)}
+                    {orden.fecha_vencimiento_pago
+                      ? `Vence: ${formatFecha(orden.fecha_vencimiento_pago)}`
+                      : 'Vencimiento sin cargar'}
                   </span>
                 )}
               </p>
@@ -568,6 +577,55 @@ export default function OrdenCompraDetallePage() {
           </div>
         </section>
 
+        {/* Bloque Vencimiento de Pago (solo órdenes a crédito en borrador, confirmada o recibida) */}
+        {orden.condicion_pago === 'credito' &&
+          (orden.estado === 'borrador' || orden.estado === 'confirmada' || orden.estado === 'recibida') && (
+            <section className="bg-zinc-900/80 border border-zinc-800 rounded-3xl p-5 space-y-3 shadow-lg">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="space-y-1">
+                  <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-2">
+                    <Clock className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Vencimiento de Pago</span>
+                  </h3>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-bold text-white">
+                      {orden.fecha_vencimiento_pago
+                        ? formatFecha(orden.fecha_vencimiento_pago)
+                        : 'Sin cargar'}
+                    </span>
+                    {!orden.fecha_vencimiento_pago && (
+                      <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                        Pendiente
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNuevoVencimiento(orden.fecha_vencimiento_pago?.split('T')[0] || '');
+                      setErrorVencimientoMsg(null);
+                      setModalVencimientoOpen(true);
+                    }}
+                    className="px-3.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded-xl text-xs font-bold transition-all shadow-md active:scale-95 inline-flex items-center gap-1.5"
+                  >
+                    <Edit className="w-3.5 h-3.5 text-amber-400" />
+                    <span>{orden.fecha_vencimiento_pago ? 'Modificar fecha' : 'Cargar vencimiento'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {!orden.fecha_vencimiento_pago && (
+                <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-2xl flex items-center gap-2.5 text-xs text-amber-300">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-amber-400" />
+                  <span>Falta cargar el vencimiento. Cargalo cuando llegue la factura del proveedor.</span>
+                </div>
+              )}
+            </section>
+        )}
+
         {/* 3. Líneas de la Orden */}
         <section className="bg-zinc-900/80 border border-zinc-800 rounded-3xl p-5 space-y-4 shadow-lg">
           <div className="flex items-center justify-between">
@@ -598,9 +656,16 @@ export default function OrdenCompraDetallePage() {
                   </div>
 
                   <div className="flex items-center justify-between sm:justify-end gap-6 text-right">
-                    <div>
+                    <div className="text-left sm:text-right">
                       <span className="text-[11px] text-zinc-400 block">Cantidad</span>
-                      <span className="font-bold text-white text-sm">{linea.cantidad}</span>
+                      <span className="font-bold text-white text-sm">
+                        {linea.cantidad} {linea.unidad_compra || ''}
+                      </span>
+                      {linea.factor_conversion && linea.factor_conversion > 1 && (
+                        <p className="text-[11px] text-zinc-400 mt-0.5 font-medium">
+                          {linea.cantidad} {linea.unidad_compra || 'cajas'} → {linea.cantidad * linea.factor_conversion} {linea.unidad_base || 'display'}
+                        </p>
+                      )}
                     </div>
 
                     <div>
@@ -902,6 +967,135 @@ export default function OrdenCompraDetallePage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Gestionar Vencimiento de Pago */}
+      {modalVencimientoOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+            onClick={() => !guardandoVencimiento && setModalVencimientoOpen(false)}
+          />
+          <div className="relative w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-3xl p-6 space-y-4 shadow-2xl text-zinc-100 animate-fade-in">
+            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400">
+                  <Clock className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">Vencimiento de Pago</h3>
+                  <p className="text-[11px] text-zinc-400">Orden #{orden.id} (a crédito)</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                disabled={guardandoVencimiento}
+                onClick={() => setModalVencimientoOpen(false)}
+                className="p-1.5 text-zinc-400 hover:text-white rounded-xl hover:bg-zinc-800 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {errorVencimientoMsg && (
+              <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-xs text-rose-300 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+                <span>{errorVencimientoMsg}</span>
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              <label htmlFor="modal-fecha-vencimiento" className="block text-xs font-medium text-zinc-300">
+                Fecha de Vencimiento de Pago
+              </label>
+              <input
+                id="modal-fecha-vencimiento"
+                type="date"
+                value={nuevoVencimiento}
+                onChange={(e) => setNuevoVencimiento(e.target.value)}
+                className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
+              />
+              <p className="text-[10px] text-zinc-500">
+                Acepta fechas pasadas según la fecha de factura del proveedor.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-2 pt-2 border-t border-zinc-800">
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={guardandoVencimiento}
+                  onClick={() => setModalVencimientoOpen(false)}
+                  className="flex-1 py-2 px-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl text-xs font-bold transition-all disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={guardandoVencimiento || !nuevoVencimiento}
+                  onClick={async () => {
+                    setGuardandoVencimiento(true);
+                    setErrorVencimientoMsg(null);
+                    try {
+                      const res = await patchVencimientoPagoOrdenCompra(orden.id, nuevoVencimiento);
+                      setOrden(res.data);
+                      setExitoMsg('Vencimiento de pago actualizado correctamente.');
+                      setModalVencimientoOpen(false);
+                    } catch (err) {
+                      console.error('[OrdenCompraDetallePage] Error al actualizar vencimiento:', err);
+                      const msg =
+                        err instanceof ApiRequestError
+                          ? err.message
+                          : err instanceof Error
+                          ? err.message
+                          : 'No se pudo actualizar la fecha de vencimiento.';
+                      setErrorVencimientoMsg(msg);
+                    } finally {
+                      setGuardandoVencimiento(false);
+                    }
+                  }}
+                  className="flex-1 py-2 px-3 bg-amber-500 hover:bg-amber-400 text-zinc-950 rounded-xl text-xs font-bold transition-all shadow-md disabled:opacity-50 inline-flex items-center justify-center gap-1.5"
+                >
+                  {guardandoVencimiento ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : null}
+                  <span>Guardar</span>
+                </button>
+              </div>
+
+              {orden.fecha_vencimiento_pago && (
+                <button
+                  type="button"
+                  disabled={guardandoVencimiento}
+                  onClick={async () => {
+                    setGuardandoVencimiento(true);
+                    setErrorVencimientoMsg(null);
+                    try {
+                      const res = await patchVencimientoPagoOrdenCompra(orden.id, null);
+                      setOrden(res.data);
+                      setExitoMsg('Vencimiento de pago limpiado correctamente.');
+                      setModalVencimientoOpen(false);
+                    } catch (err) {
+                      console.error('[OrdenCompraDetallePage] Error al limpiar vencimiento:', err);
+                      const msg =
+                        err instanceof ApiRequestError
+                          ? err.message
+                          : err instanceof Error
+                          ? err.message
+                          : 'No se pudo limpiar la fecha de vencimiento.';
+                      setErrorVencimientoMsg(msg);
+                    } finally {
+                      setGuardandoVencimiento(false);
+                    }
+                  }}
+                  className="w-full py-1.5 text-zinc-400 hover:text-rose-400 text-xs transition-colors"
+                >
+                  Limpiar fecha (dejar sin vencimiento)
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}

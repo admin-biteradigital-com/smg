@@ -33,6 +33,7 @@ import type {
   OrdenCompraDetalle,
   CreateOrdenCompraPayload,
   UpdateOrdenCompraPayload,
+  PatchVencimientoPagoPayload,
   CreatePagoProveedorPayload,
   RegistrarPagoResponse,
   RegistrarRecepcionPayload,
@@ -836,6 +837,24 @@ export async function updateOrdenCompra(
   payload: UpdateOrdenCompraPayload
 ): Promise<ApiResponse<OrdenCompraDetalle>> {
   return api.patch<ApiResponse<OrdenCompraDetalle>>(`/api/v1/ordenes-compra/${id}`, payload);
+}
+
+/**
+ * Actualiza la fecha de vencimiento de pago de una orden de compra a crédito.
+ * Endpoint: PATCH /api/v1/ordenes-compra/:id/vencimiento-pago (roles: admin)
+ * Body: { fecha_vencimiento_pago: string | null }
+ */
+export async function patchVencimientoPagoOrdenCompra(
+  id: number,
+  fechaVencimientoPago: string | null
+): Promise<ApiResponse<OrdenCompraDetalle>> {
+  const payload: PatchVencimientoPagoPayload = {
+    fecha_vencimiento_pago: fechaVencimientoPago,
+  };
+  return api.patch<ApiResponse<OrdenCompraDetalle>>(
+    `/api/v1/ordenes-compra/${id}/vencimiento-pago`,
+    payload
+  );
 }
 
 /**

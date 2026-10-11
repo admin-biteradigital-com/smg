@@ -289,9 +289,11 @@ export default function ComprasListPage() {
                             <strong className="text-zinc-200 capitalize font-medium">
                               {orden.condicion_pago || 'contado'}
                             </strong>
-                            {orden.condicion_pago === 'credito' && orden.fecha_vencimiento_pago && (
+                            {orden.condicion_pago === 'credito' && (
                               <span className="ml-1 text-zinc-400">
-                                (Vence: {formatFecha(orden.fecha_vencimiento_pago)})
+                                {orden.fecha_vencimiento_pago
+                                  ? `(Vence: ${formatFecha(orden.fecha_vencimiento_pago)})`
+                                  : '(Vencimiento sin cargar)'}
                               </span>
                             )}
                           </span>

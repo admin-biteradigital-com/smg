@@ -5,6 +5,7 @@ import {
   getOrdenCompraById,
   createOrdenCompra,
   updateOrdenCompra,
+  patchVencimientoPagoOrdenCompra,
   confirmarOrdenCompra,
   cancelarOrdenCompra,
   registrarPagoOrdenCompra,
@@ -109,11 +110,10 @@ describe('ADR-020: API Endpoints para Órdenes de Compra y Proveedores', () => {
   });
 
   describe('createOrdenCompra', () => {
-    it('debe enviar POST /api/v1/ordenes-compra con body JSON en snake_case', async () => {
+    it('debe enviar POST /api/v1/ordenes-compra con body JSON en snake_case sin exigir fecha vencimiento', async () => {
       const payload = {
         id_proveedor: 3,
         condicion_pago: 'credito' as const,
-        fecha_vencimiento_pago: '2026-10-30',
         fecha_entrega_estimada: '2026-10-15',
         notas: 'Entrega en la mañana',
         lineas: [{ id_producto: 101, cantidad: 5, precio_unitario_acordado: 2500 }],
@@ -139,6 +139,54 @@ describe('ADR-020: API Endpoints para Órdenes de Compra y Proveedores', () => {
       expect(init?.method).toBe('POST');
       expect(JSON.parse(init?.body as string)).toEqual(payload);
       expect(res.data.id).toBe(1);
+    });
+  });
+
+  describe('patchVencimientoPagoOrdenCompra', () => {
+    it('debe enviar PATCH /api/v1/ordenes-compra/:id/vencimiento-pago con fecha', async () => {
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            data: { id: 12, fecha_vencimiento_pago: '2026-11-20' },
+          }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
+      );
+
+      const res = await patchVencimientoPagoOrdenCompra(12, '2026-11-20');
+
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      const [url, init] = fetchSpy.mock.calls[0];
+      expect(url).toContain('/api/v1/ordenes-compra/12/vencimiento-pago');
+      expect(init?.method).toBe('PATCH');
+      expect(JSON.parse(init?.body as string)).toEqual({ fecha_vencimiento_pago: '2026-11-20' });
+      expect(res.data.id).toBe(12);
+    });
+
+    it('debe enviar PATCH /api/v1/ordenes-compra/:id/vencimiento-pago con null para limpiar fecha', async () => {
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            data: { id: 12, fecha_vencimiento_pago: null },
+          }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
+      );
+
+      const res = await patchVencimientoPagoOrdenCompra(12, null);
+
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      const [url, init] = fetchSpy.mock.calls[0];
+      expect(url).toContain('/api/v1/ordenes-compra/12/vencimiento-pago');
+      expect(init?.method).toBe('PATCH');
+      expect(JSON.parse(init?.body as string)).toEqual({ fecha_vencimiento_pago: null });
+      expect(res.data.fecha_vencimiento_pago).toBeNull();
     });
   });
 

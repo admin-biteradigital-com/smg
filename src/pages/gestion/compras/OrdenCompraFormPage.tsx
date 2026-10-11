@@ -20,6 +20,7 @@ import BarcodeScannerModal from '@/components/gestion/BarcodeScannerModal';
 import {
   getProveedoresAdmin,
   getProductosAdmin,
+  getProductoAdminById,
   getOrdenCompraById,
   createOrdenCompra,
   updateOrdenCompra,
@@ -29,10 +30,14 @@ import {
   formatCLP,
   sugerirFechaEntregaEstimada,
   validarCondicionPago,
+  calcularCostoInicialCompra,
+  formatearDetalleEquivalenciaLinea,
+  resolverSeleccionProveedor,
 } from '@/lib/compras';
 import type {
   ProveedorAdminItem,
   ProductoAdminItem,
+  ProveedorProductoItem,
   OrdenCompraCondicionPago,
   CreateOrdenCompraPayload,
   UpdateOrdenCompraPayload,
@@ -43,7 +48,10 @@ interface LineaFormItem {
   nombre: string;
   codigo?: string | null;
   cantidad: number;
-  precio_unitario_acordado: number;
+  precio_unitario_acordado: number | null;
+  unidad_compra: string;
+  unidad_base: string;
+  factor_conversion: number;
 }
 
 export default function OrdenCompraFormPage() {
@@ -62,7 +70,6 @@ export default function OrdenCompraFormPage() {
   // Formulario Cabecera
   const [idProveedor, setIdProveedor] = useState<number | ''>('');
   const [condicionPago, setCondicionPago] = useState<OrdenCompraCondicionPago>('contado');
-  const [fechaVencimientoPago, setFechaVencimientoPago] = useState<string>('');
   const [fechaEntregaEstimada, setFechaEntregaEstimada] = useState<string>(
     sugerirFechaEntregaEstimada()
   );
@@ -71,13 +78,20 @@ export default function OrdenCompraFormPage() {
   // Formulario Líneas
   const [lineas, setLineas] = useState<LineaFormItem[]>([]);
 
-  // Filtro de productos por proveedor
-  const [soloProductosProveedor, setSoloProductosProveedor] = useState<boolean>(true);
+  // Búsqueda y selector de productos
   const [cargandoProductos, setCargandoProductos] = useState<boolean>(false);
   const [busquedaProducto, setBusquedaProducto] = useState<string>('');
   const [selectorAbierto, setSelectorAbierto] = useState<boolean>(false);
+  const [resolviendoProveedor, setResolviendoProveedor] = useState<boolean>(false);
 
-  // Modal confirmación cambio de proveedor
+  // Modal para cuando el producto tiene 2 o más proveedores
+  const [modalMultiplesProveedores, setModalMultiplesProveedores] = useState<{
+    producto: ProductoAdminItem;
+    proveedores: ProveedorProductoItem[];
+  } | null>(null);
+  const [proveedorSeleccionadoModal, setProveedorSeleccionadoModal] = useState<number | null>(null);
+
+  // Modal confirmación cambio de proveedor cuando ya hay líneas
   const [modalCambioProveedor, setModalCambioProveedor] = useState<{
     nuevoProveedorId: number;
   } | null>(null);
@@ -106,6 +120,11 @@ export default function OrdenCompraFormPage() {
             return;
           }
 
+          // Cargar productos para resolver unidades de las líneas si es necesario
+          const prodsRes = await getProductosAdmin(1);
+          const todosProds = prodsRes?.data || [];
+          const mapProds = new Map(todosProds.map((p) => [p.id, p]));
+
           const ordenRes = await getOrdenCompraById(ordenId);
           const ordenData = ordenRes?.data;
 
@@ -128,22 +147,52 @@ export default function OrdenCompraFormPage() {
           setCondicionPago(
             (ordenData.condicion_pago as OrdenCompraCondicionPago) || 'contado'
           );
-          setFechaVencimientoPago(ordenData.fecha_vencimiento_pago?.split('T')[0] || '');
           setFechaEntregaEstimada(
             ordenData.fecha_entrega_estimada?.split('T')[0] || sugerirFechaEntregaEstimada()
           );
           setNotas(ordenData.notas || '');
 
           if (ordenData.lineas && ordenData.lineas.length > 0) {
-            setLineas(
-              ordenData.lineas.map((l) => ({
+            const lineasResueltas: LineaFormItem[] = [];
+            for (const l of ordenData.lineas) {
+              const prod = mapProds.get(l.id_producto);
+              const factor =
+                l.factor_conversion && l.factor_conversion > 0
+                  ? l.factor_conversion
+                  : prod?.factorConversionCompra && prod.factorConversionCompra > 1
+                  ? prod.factorConversionCompra
+                  : 1;
+              const uCompra =
+                l.unidad_compra ||
+                prod?.nombreUnidadCompra ||
+                prod?.nombreUnidadBase ||
+                '';
+              const uBase =
+                l.unidad_base ||
+                prod?.nombreUnidadBase ||
+                uCompra ||
+                '';
+
+              if (!uCompra && !uBase) {
+                setErrorGlobal(
+                  `No se pudo resolver la información de unidad del producto #${l.id_producto} (${l.producto_nombre || ''}).`
+                );
+                setLoadingInicial(false);
+                return;
+              }
+
+              lineasResueltas.push({
                 id_producto: l.id_producto,
-                nombre: l.producto_nombre || `Producto #${l.id_producto}`,
-                codigo: l.producto_codigo,
+                nombre: l.producto_nombre || prod?.nombre || `Producto #${l.id_producto}`,
+                codigo: l.producto_codigo || prod?.codigoBarras,
                 cantidad: l.cantidad,
                 precio_unitario_acordado: l.precio_unitario_acordado,
-              }))
-            );
+                unidad_compra: uCompra || 'unidad',
+                unidad_base: uBase || 'unidad',
+                factor_conversion: factor,
+              });
+            }
+            setLineas(lineasResueltas);
           }
         }
       } catch (err: unknown) {
@@ -163,11 +212,11 @@ export default function OrdenCompraFormPage() {
     initData();
   }, [esEdicion, ordenId]);
 
-  // 2. Cargar productos según proveedor seleccionado y filtro toggle
-  const loadProductos = useCallback(async (proveedorId?: number, soloProveedor = true) => {
+  // 2. Cargar productos según proveedor seleccionado
+  const loadProductos = useCallback(async (proveedorId?: number) => {
     setCargandoProductos(true);
     try {
-      if (soloProveedor && proveedorId) {
+      if (proveedorId) {
         const res = await getProductosAdmin({ activo: 1, id_proveedor: proveedorId });
         setProductosDisponibles(res?.data || []);
       } else {
@@ -183,11 +232,11 @@ export default function OrdenCompraFormPage() {
 
   useEffect(() => {
     if (typeof idProveedor === 'number' && idProveedor > 0) {
-      loadProductos(idProveedor, soloProductosProveedor);
+      loadProductos(idProveedor);
     } else {
-      loadProductos(undefined, false);
+      loadProductos(undefined);
     }
-  }, [idProveedor, soloProductosProveedor, loadProductos]);
+  }, [idProveedor, loadProductos]);
 
   // Manejo de cambio de proveedor
   const handleProveedorChange = (nuevoIdStr: string) => {
@@ -227,34 +276,87 @@ export default function OrdenCompraFormPage() {
     setModalCambioProveedor(null);
   };
 
-  // Agregar producto a líneas
-  const agregarProductoALineas = (prod: ProductoAdminItem) => {
-    // Validar duplicado
+  // Ejecutar agregar producto a líneas con sus unidades y costo calculado
+  const ejecutarAgregarLinea = useCallback((prod: ProductoAdminItem) => {
     if (lineas.some((l) => l.id_producto === prod.id)) {
       setErrorGlobal(`El producto "${prod.nombre}" ya está agregado a la orden.`);
       setSelectorAbierto(false);
       return;
     }
 
-    const precioSugerido =
-      prod.precioCosto && prod.precioCosto > 0
-        ? prod.precioCosto
-        : prod.precioUnitarioSugerido && prod.precioUnitarioSugerido > 0
-        ? prod.precioUnitarioSugerido
-        : 0;
+    const factor =
+      prod.factorConversionCompra && prod.factorConversionCompra > 1
+        ? prod.factorConversionCompra
+        : 1;
+    const uCompra = prod.nombreUnidadCompra || prod.nombreUnidadBase || 'unidad';
+    const uBase = prod.nombreUnidadBase || 'unidad';
+    const costoInicial = calcularCostoInicialCompra(prod.precioCosto, factor);
 
     const nuevaLinea: LineaFormItem = {
       id_producto: prod.id,
       nombre: prod.nombre,
       codigo: prod.codigoBarras,
       cantidad: 1,
-      precio_unitario_acordado: Math.round(precioSugerido),
+      precio_unitario_acordado: costoInicial,
+      unidad_compra: uCompra,
+      unidad_base: uBase,
+      factor_conversion: factor,
     };
 
     setLineas((prev) => [...prev, nuevaLinea]);
     setErrorGlobal(null);
     setSelectorAbierto(false);
     setBusquedaProducto('');
+  }, [lineas]);
+
+  // Selección de producto (con resolución de proveedor si aún no hay proveedor asignado)
+  const handleSeleccionarProducto = async (prod: ProductoAdminItem) => {
+    if (idProveedor && typeof idProveedor === 'number') {
+      ejecutarAgregarLinea(prod);
+      return;
+    }
+
+    // Sin proveedor seleccionado: consultar detalle del producto para obtener sus proveedores
+    setResolviendoProveedor(true);
+    setErrorGlobal(null);
+    try {
+      const res = await getProductoAdminById(prod.id);
+      const proveedoresProd = res?.data?.proveedores || [];
+      const decision = resolverSeleccionProveedor(proveedoresProd);
+
+      if (decision.accion === 'sin_proveedores') {
+        setErrorGlobal(decision.mensaje);
+        setSelectorAbierto(false);
+        return;
+      }
+
+      if (decision.accion === 'un_proveedor') {
+        setIdProveedor(decision.proveedor.id);
+        ejecutarAgregarLinea(prod);
+        return;
+      }
+
+      // multiples_proveedores: abrir modal
+      setProveedorSeleccionadoModal(null);
+      setModalMultiplesProveedores({
+        producto: prod,
+        proveedores: decision.proveedores,
+      });
+    } catch (err) {
+      console.error('[OrdenCompraFormPage] Error al resolver proveedores del producto:', err);
+      setErrorGlobal('Error al consultar los proveedores del producto.');
+    } finally {
+      setResolviendoProveedor(false);
+    }
+  };
+
+  const confirmarProveedorModal = () => {
+    if (!modalMultiplesProveedores || !proveedorSeleccionadoModal) return;
+    const prod = modalMultiplesProveedores.producto;
+    setIdProveedor(proveedorSeleccionadoModal);
+    ejecutarAgregarLinea(prod);
+    setModalMultiplesProveedores(null);
+    setProveedorSeleccionadoModal(null);
   };
 
   // Escaneo de código de barras
@@ -279,13 +381,28 @@ export default function OrdenCompraFormPage() {
     campo: 'cantidad' | 'precio_unitario_acordado',
     valorStr: string
   ) => {
-    const valor = parseInt(valorStr, 10);
     setLineas((prev) => {
       const copy = [...prev];
-      copy[index] = {
-        ...copy[index],
-        [campo]: isNaN(valor) ? 0 : Math.max(0, valor),
-      };
+      if (campo === 'cantidad') {
+        const valor = parseInt(valorStr, 10);
+        copy[index] = {
+          ...copy[index],
+          cantidad: isNaN(valor) ? 0 : Math.max(0, valor),
+        };
+      } else {
+        if (valorStr.trim() === '') {
+          copy[index] = {
+            ...copy[index],
+            precio_unitario_acordado: null,
+          };
+        } else {
+          const valor = parseInt(valorStr, 10);
+          copy[index] = {
+            ...copy[index],
+            precio_unitario_acordado: isNaN(valor) ? null : Math.max(0, valor),
+          };
+        }
+      }
       return copy;
     });
   };
@@ -297,7 +414,7 @@ export default function OrdenCompraFormPage() {
 
   // Cálculos de subtotales y total referencial en cliente
   const totalCalculado = useMemo(() => {
-    return lineas.reduce((acc, l) => acc + (l.cantidad * l.precio_unitario_acordado), 0);
+    return lineas.reduce((acc, l) => acc + (l.cantidad * (l.precio_unitario_acordado || 0)), 0);
   }, [lineas]);
 
   // Productos filtrados para el selector
@@ -322,10 +439,7 @@ export default function OrdenCompraFormPage() {
     }
 
     // Validación de condición de pago
-    const validacionCondicion = validarCondicionPago(
-      condicionPago,
-      condicionPago === 'credito' ? fechaVencimientoPago : null
-    );
+    const validacionCondicion = validarCondicionPago(condicionPago);
     if (!validacionCondicion.valido) {
       setErrorGlobal(validacionCondicion.error || 'Condición de pago inválida.');
       return;
@@ -340,11 +454,13 @@ export default function OrdenCompraFormPage() {
     for (let i = 0; i < lineas.length; i++) {
       const linea = lineas[i];
       if (linea.cantidad <= 0) {
-        setErrorGlobal(`La cantidad para "${linea.nombre}" debe ser mayor a 0.`);
+        setErrorGlobal(`La cantidad para "${linea.nombre}" debe ser mayor o igual a 1.`);
         return;
       }
-      if (linea.precio_unitario_acordado <= 0) {
-        setErrorGlobal(`El precio unitario para "${linea.nombre}" debe ser mayor a 0.`);
+      if (linea.precio_unitario_acordado === null || linea.precio_unitario_acordado <= 0) {
+        setErrorGlobal(
+          `El costo por ${linea.unidad_compra} para "${linea.nombre}" es obligatorio y debe ser mayor a 0.`
+        );
         return;
       }
     }
@@ -354,7 +470,7 @@ export default function OrdenCompraFormPage() {
       const lineasPayload = lineas.map((l) => ({
         id_producto: l.id_producto,
         cantidad: l.cantidad,
-        precio_unitario_acordado: l.precio_unitario_acordado,
+        precio_unitario_acordado: l.precio_unitario_acordado!,
       }));
 
       if (esEdicion) {
@@ -362,8 +478,6 @@ export default function OrdenCompraFormPage() {
           id_proveedor: idProveedor,
           fecha_entrega_estimada: fechaEntregaEstimada || null,
           condicion_pago: condicionPago,
-          fecha_vencimiento_pago:
-            condicionPago === 'credito' && fechaVencimientoPago ? fechaVencimientoPago : null,
           notas: notas.trim() || null,
           lineas: lineasPayload,
         };
@@ -376,8 +490,6 @@ export default function OrdenCompraFormPage() {
           id_proveedor: idProveedor,
           fecha_entrega_estimada: fechaEntregaEstimada || null,
           condicion_pago: condicionPago,
-          fecha_vencimiento_pago:
-            condicionPago === 'credito' && fechaVencimientoPago ? fechaVencimientoPago : null,
           notas: notas.trim() || null,
           lineas: lineasPayload,
         };
@@ -497,7 +609,7 @@ export default function OrdenCompraFormPage() {
                 </select>
               </div>
 
-              {/* Condición de Pago y Vencimiento */}
+              {/* Condición de Pago y Entrega Estimada */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label htmlFor="condicion-pago" className="block text-[11px] font-medium text-zinc-400 mb-1">
@@ -506,13 +618,7 @@ export default function OrdenCompraFormPage() {
                   <select
                     id="condicion-pago"
                     value={condicionPago}
-                    onChange={(e) => {
-                      const nuevaCond = e.target.value as OrdenCompraCondicionPago;
-                      setCondicionPago(nuevaCond);
-                      if (nuevaCond === 'contado') {
-                        setFechaVencimientoPago('');
-                      }
-                    }}
+                    onChange={(e) => setCondicionPago(e.target.value as OrdenCompraCondicionPago)}
                     className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-rose-500"
                   >
                     <option value="contado">Contado</option>
@@ -520,38 +626,21 @@ export default function OrdenCompraFormPage() {
                   </select>
                 </div>
 
-                {condicionPago === 'credito' && (
-                  <div className="animate-fade-in">
-                    <label htmlFor="fecha-vencimiento" className="block text-[11px] font-medium text-amber-400 mb-1">
-                      Fecha Vencimiento Pago *
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label htmlFor="fecha-entrega" className="block text-[11px] font-medium text-zinc-400">
+                      Fecha de Entrega Estimada
                     </label>
-                    <input
-                      id="fecha-vencimiento"
-                      type="date"
-                      required={condicionPago === 'credito'}
-                      value={fechaVencimientoPago}
-                      onChange={(e) => setFechaVencimientoPago(e.target.value)}
-                      className="w-full bg-zinc-800 border border-amber-500/40 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
-                    />
+                    <span className="text-[10px] text-zinc-500">Sugerida: hoy + 4 días hábiles</span>
                   </div>
-                )}
-              </div>
-
-              {/* Fecha Entrega Estimada */}
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label htmlFor="fecha-entrega" className="block text-[11px] font-medium text-zinc-400">
-                    Fecha de Entrega Estimada
-                  </label>
-                  <span className="text-[10px] text-zinc-500">Sugerida: hoy + 4 días hábiles</span>
+                  <input
+                    id="fecha-entrega"
+                    type="date"
+                    value={fechaEntregaEstimada}
+                    onChange={(e) => setFechaEntregaEstimada(e.target.value)}
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-rose-500"
+                  />
                 </div>
-                <input
-                  id="fecha-entrega"
-                  type="date"
-                  value={fechaEntregaEstimada}
-                  onChange={(e) => setFechaEntregaEstimada(e.target.value)}
-                  className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-rose-500"
-                />
               </div>
 
               {/* Notas */}
@@ -608,21 +697,13 @@ export default function OrdenCompraFormPage() {
               <div className="bg-zinc-950/80 border border-zinc-700/80 rounded-2xl p-4 space-y-3 animate-fade-in">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-white">Catálogo de Productos</span>
-
-                  {/* Toggle para filtrar solo productos de este proveedor */}
                   {idProveedor ? (
-                    <label className="flex items-center gap-2 text-[11px] text-zinc-300 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={soloProductosProveedor}
-                        onChange={(e) => setSoloProductosProveedor(e.target.checked)}
-                        className="rounded bg-zinc-800 border-zinc-700 text-rose-500 focus:ring-0 w-3.5 h-3.5"
-                      />
-                      <span>Solo productos de este proveedor</span>
-                    </label>
+                    <span className="text-[10px] text-zinc-400 font-medium">
+                      Filtrado por proveedor actual
+                    </span>
                   ) : (
-                    <span className="text-[10px] text-zinc-500 italic">
-                      Selecciona un proveedor para ver sus productos específicos
+                    <span className="text-[10px] text-zinc-400 font-medium italic">
+                      Catálogo completo
                     </span>
                   )}
                 </div>
@@ -641,30 +722,24 @@ export default function OrdenCompraFormPage() {
 
                 {/* Lista de productos para seleccionar */}
                 <div className="max-h-56 overflow-y-auto space-y-1.5 divide-y divide-zinc-800/60 pr-1">
-                  {cargandoProductos ? (
+                  {cargandoProductos || resolviendoProveedor ? (
                     <div className="py-6 flex items-center justify-center text-zinc-500 text-xs gap-2">
                       <Loader2 className="w-4 h-4 animate-spin text-rose-400" />
-                      <span>Cargando productos...</span>
+                      <span>{resolviendoProveedor ? 'Consultando proveedores...' : 'Cargando productos...'}</span>
                     </div>
                   ) : productosFiltradosSelector.length === 0 ? (
                     <div className="py-6 text-center text-zinc-500 text-xs">
                       No se encontraron productos coincidentes.
-                      {soloProductosProveedor && idProveedor && (
-                        <div className="pt-2">
-                          <button
-                            type="button"
-                            onClick={() => setSoloProductosProveedor(false)}
-                            className="text-rose-400 underline text-xs"
-                          >
-                            Ver todos los productos del catálogo
-                          </button>
-                        </div>
-                      )}
                     </div>
                   ) : (
                     productosFiltradosSelector.map((prod) => {
                       const yaAgregado = lineas.some((l) => l.id_producto === prod.id);
-                      const precioCosto = prod.precioCosto || prod.precioUnitarioSugerido || 0;
+                      const factor =
+                        prod.factorConversionCompra && prod.factorConversionCompra > 1
+                          ? prod.factorConversionCompra
+                          : 1;
+                      const uCompra = prod.nombreUnidadCompra || prod.nombreUnidadBase || 'unidad';
+                      const costoRef = calcularCostoInicialCompra(prod.precioCosto, factor);
 
                       return (
                         <div
@@ -675,18 +750,22 @@ export default function OrdenCompraFormPage() {
                             <p className="font-semibold text-zinc-200 truncate">{prod.nombre}</p>
                             <div className="flex items-center gap-2 text-[10px] text-zinc-400">
                               {prod.codigoBarras && <span>Cod: {prod.codigoBarras}</span>}
-                              <span>Costo ref: {formatCLP(precioCosto)}</span>
+                              <span>
+                                {costoRef !== null
+                                  ? `Costo ref: ${formatCLP(costoRef)} / ${uCompra}`
+                                  : 'Sin costo registrado'}
+                              </span>
                             </div>
                           </div>
 
                           <button
                             type="button"
-                            disabled={yaAgregado}
-                            onClick={() => agregarProductoALineas(prod)}
+                            disabled={yaAgregado || resolviendoProveedor}
+                            onClick={() => handleSeleccionarProducto(prod)}
                             className={`px-3 py-1 rounded-xl text-xs font-bold transition-all shrink-0 ${
                               yaAgregado
                                 ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
-                                : 'bg-rose-600 hover:bg-rose-500 text-white active:scale-95 shadow'
+                                : 'bg-rose-600 hover:bg-rose-500 text-white active:scale-95 shadow disabled:opacity-50'
                             }`}
                           >
                             {yaAgregado ? 'Agregado' : 'Seleccionar'}
@@ -708,7 +787,14 @@ export default function OrdenCompraFormPage() {
                 </div>
               ) : (
                 lineas.map((linea, index) => {
-                  const subtotal = linea.cantidad * linea.precio_unitario_acordado;
+                  const subtotal = linea.cantidad * (linea.precio_unitario_acordado || 0);
+                  const equivalencia = formatearDetalleEquivalenciaLinea({
+                    cantidad: linea.cantidad,
+                    costoPorUnidadCompra: linea.precio_unitario_acordado || 0,
+                    factorConversion: linea.factor_conversion,
+                    nombreUnidadBase: linea.unidad_base,
+                    nombreUnidadCompra: linea.unidad_compra,
+                  });
 
                   return (
                     <div
@@ -736,9 +822,11 @@ export default function OrdenCompraFormPage() {
                       </div>
 
                       <div className="grid grid-cols-3 gap-2 items-center text-xs">
-                        {/* Cantidad */}
+                        {/* Cantidad en unidad de compra */}
                         <div>
-                          <label className="block text-[10px] text-zinc-400 mb-0.5">Cantidad</label>
+                          <label className="block text-[10px] text-zinc-400 mb-0.5 truncate">
+                            Cantidad ({linea.unidad_compra})
+                          </label>
                           <input
                             type="number"
                             min="1"
@@ -752,17 +840,18 @@ export default function OrdenCompraFormPage() {
                           />
                         </div>
 
-                        {/* Precio Unitario Acordado */}
+                        {/* Costo por unidad de compra */}
                         <div>
-                          <label className="block text-[10px] text-zinc-400 mb-0.5">
-                            Precio unitario
+                          <label className="block text-[10px] text-zinc-400 mb-0.5 truncate">
+                            Costo por {linea.unidad_compra}
                           </label>
                           <input
                             type="number"
                             min="1"
                             step="1"
                             required
-                            value={linea.precio_unitario_acordado || ''}
+                            placeholder="Requerido"
+                            value={linea.precio_unitario_acordado ?? ''}
                             onChange={(e) =>
                               actualizarLinea(index, 'precio_unitario_acordado', e.target.value)
                             }
@@ -778,6 +867,13 @@ export default function OrdenCompraFormPage() {
                           </span>
                         </div>
                       </div>
+
+                      {/* Equivalencia a stock base cuando factor > 1 */}
+                      {linea.factor_conversion > 1 && equivalencia && (
+                        <div className="text-[11px] text-zinc-400 pt-2 border-t border-zinc-800/60 font-medium">
+                          {equivalencia}
+                        </div>
+                      )}
                     </div>
                   );
                 })
@@ -861,6 +957,98 @@ export default function OrdenCompraFormPage() {
         </div>
       )}
 
+      {/* MODAL: Selección de Proveedor cuando el producto tiene 2 o más */}
+      {modalMultiplesProveedores && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+            onClick={() => {
+              setModalMultiplesProveedores(null);
+              setProveedorSeleccionadoModal(null);
+            }}
+          />
+          <div className="relative w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-3xl p-6 space-y-4 shadow-2xl text-zinc-100 animate-fade-in">
+            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400">
+                  <Building2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">Elegir Proveedor</h3>
+                  <p className="text-[11px] text-zinc-400 truncate max-w-[240px]">
+                    {modalMultiplesProveedores.producto.nombre}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setModalMultiplesProveedores(null);
+                  setProveedorSeleccionadoModal(null);
+                }}
+                className="p-1.5 text-zinc-400 hover:text-white rounded-xl hover:bg-zinc-800 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-zinc-300">
+              Este producto tiene varios proveedores asociados. Selecciona cuál proveerá esta orden:
+            </p>
+
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              {modalMultiplesProveedores.proveedores.map((prov) => {
+                const seleccionado = proveedorSeleccionadoModal === prov.id;
+                return (
+                  <label
+                    key={prov.id}
+                    onClick={() => setProveedorSeleccionadoModal(prov.id)}
+                    className={`flex items-center justify-between p-3 rounded-2xl border cursor-pointer transition-all ${
+                      seleccionado
+                        ? 'bg-rose-500/15 border-rose-500/50 text-white'
+                        : 'bg-zinc-950/60 border-zinc-800 hover:border-zinc-700 text-zinc-300'
+                    }`}
+                  >
+                    <div className="min-w-0 pr-2">
+                      <p className="text-xs font-bold truncate">{prov.nombre}</p>
+                      {prov.rut && <p className="text-[10px] text-zinc-400">RUT: {prov.rut}</p>}
+                    </div>
+                    <input
+                      type="radio"
+                      name="proveedor-multiple"
+                      checked={seleccionado}
+                      onChange={() => setProveedorSeleccionadoModal(prov.id)}
+                      className="w-4 h-4 text-rose-600 bg-zinc-800 border-zinc-700 focus:ring-0"
+                    />
+                  </label>
+                );
+              })}
+            </div>
+
+            <div className="flex gap-2 pt-2 border-t border-zinc-800">
+              <button
+                type="button"
+                onClick={() => {
+                  setModalMultiplesProveedores(null);
+                  setProveedorSeleccionadoModal(null);
+                }}
+                className="flex-1 py-2.5 px-4 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl text-xs font-bold transition-all"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={!proveedorSeleccionadoModal}
+                onClick={confirmarProveedorModal}
+                className="flex-1 py-2.5 px-4 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition-all shadow-md disabled:opacity-50"
+              >
+                Asignar y agregar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* MODAL: Escáner de Código de Barras */}
       <BarcodeScannerModal
         isOpen={scannerOpen}
@@ -906,7 +1094,16 @@ export default function OrdenCompraFormPage() {
                 </span>
                 <span>·</span>
                 <span>
-                  Costo: {formatCLP(scannedMatch.precioCosto || scannedMatch.precioUnitarioSugerido || 0)}
+                  {(() => {
+                    const factor =
+                      scannedMatch.factorConversionCompra && scannedMatch.factorConversionCompra > 1
+                        ? scannedMatch.factorConversionCompra
+                        : 1;
+                    const uCompra =
+                      scannedMatch.nombreUnidadCompra || scannedMatch.nombreUnidadBase || 'unidad';
+                    const costo = calcularCostoInicialCompra(scannedMatch.precioCosto, factor);
+                    return costo !== null ? `Costo: ${formatCLP(costo)} / ${uCompra}` : 'Sin costo registrado';
+                  })()}
                 </span>
               </div>
             </div>
@@ -922,8 +1119,9 @@ export default function OrdenCompraFormPage() {
               <button
                 type="button"
                 onClick={() => {
-                  agregarProductoALineas(scannedMatch);
+                  const match = scannedMatch;
                   setScannedMatch(null);
+                  handleSeleccionarProducto(match);
                 }}
                 className="flex-1 py-2.5 px-4 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition-all shadow-md inline-flex items-center justify-center gap-1.5"
               >
