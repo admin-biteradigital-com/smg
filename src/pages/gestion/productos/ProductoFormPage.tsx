@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   ChevronLeft,
@@ -35,6 +35,11 @@ import {
 } from '@/lib/api';
 import type { UnidadMedidaItem, ProveedorAdminItem, ProveedorProductoItem } from '@/types';
 import { formatRut } from '@/lib/rut';
+import {
+  validarFactorConversion,
+  determinarFactorYUnidades,
+  formatearVistaPreviaFactor,
+} from '@/lib/productos';
 
 export default function ProductoFormPage() {
   const navigate = useNavigate();
@@ -83,6 +88,12 @@ export default function ProductoFormPage() {
   const [stockSeguridadMinimo, setStockSeguridadMinimo] = useState<string>('');
   const [idUnidadVenta, setIdUnidadVenta] = useState<string>('');
   const [idUnidadCompra, setIdUnidadCompra] = useState<string>('');
+  const [factorConversionCompra, setFactorConversionCompra] = useState<string>('');
+  const initialIdUnidadBase = useRef<string>('');
+  const [error409, setError409] = useState<{
+    message: string;
+    details?: Array<{ field?: string; message?: string; count?: number; [key: string]: unknown }>;
+  } | null>(null);
 
   // Campos: Visibilidad
   const [activo, setActivo] = useState<number>(1);
@@ -119,7 +130,9 @@ export default function ProductoFormPage() {
             const prod = resProd.data;
             setNombre(prod.nombre || '');
             setCodigoBarras(prod.codigoBarras || '');
-            setIdUnidadBase(prod.idUnidadBase ? String(prod.idUnidadBase) : '');
+            const baseIdStr = prod.idUnidadBase ? String(prod.idUnidadBase) : '';
+            setIdUnidadBase(baseIdStr);
+            initialIdUnidadBase.current = baseIdStr;
             setDescripcion(prod.descripcion || '');
 
             setPrecioUnitarioSugerido(
@@ -148,6 +161,11 @@ export default function ProductoFormPage() {
             );
             setIdUnidadCompra(
               prod.idUnidadCompra ? String(prod.idUnidadCompra) : ''
+            );
+            setFactorConversionCompra(
+              prod.factorConversionCompra !== null && prod.factorConversionCompra !== undefined
+                ? String(prod.factorConversionCompra)
+                : ''
             );
 
             setActivo(prod.activo ?? 1);
@@ -267,9 +285,42 @@ export default function ProductoFormPage() {
     }
   };
 
+  const unidadBaseSeleccionada = unidades.find((u) => String(u.id) === String(idUnidadBase));
+  const nombreUnidadBase = unidadBaseSeleccionada?.nombre || '';
+
+  const unidadCompraSeleccionada = unidades.find((u) => String(u.id) === String(idUnidadCompra));
+  const nombreUnidadCompra = unidadCompraSeleccionada?.nombre || '';
+
+  const esUnidadCompraDistinta = Boolean(
+    idUnidadCompra && String(idUnidadCompra) !== String(idUnidadBase)
+  );
+  const esUnidadVentaDistinta = Boolean(
+    idUnidadVenta && String(idUnidadVenta) !== String(idUnidadBase)
+  );
+
+  const vistaPreviaFactor = esUnidadCompraDistinta
+    ? formatearVistaPreviaFactor({
+        nombreUnidadCompra,
+        factor: factorConversionCompra,
+        nombreUnidadBase,
+      })
+    : null;
+
+  const handleCambioUnidadBase = (nuevoId: string) => {
+    setIdUnidadBase(nuevoId);
+    // 8c. En edición, si el usuario cambia la unidad base y la unidad de compra sigue siendo distinta,
+    // vaciar el campo de factor y exigirlo de nuevo con la pregunta actualizada a la nueva base.
+    if (isEditing && initialIdUnidadBase.current && nuevoId !== initialIdUnidadBase.current) {
+      if (idUnidadCompra && String(idUnidadCompra) !== String(nuevoId)) {
+        setFactorConversionCompra('');
+      }
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
+    setError409(null);
     setExitoMsg(null);
     setAdvertenciaMsg(null);
 
@@ -284,6 +335,19 @@ export default function ProductoFormPage() {
       return;
     }
 
+    // Validar factor de conversión cuando la unidad de compra difiere de la base
+    const validacionFactor = validarFactorConversion(
+      factorConversionCompra,
+      esUnidadCompraDistinta,
+      nombreUnidadBase || 'unidades base',
+      nombreUnidadCompra || 'unidad de compra'
+    );
+
+    if (!validacionFactor.valido) {
+      setErrorMsg(validacionFactor.error || 'Factor de conversión inválido.');
+      return;
+    }
+
     setGuardando(true);
 
     const parseIntegerOrNull = (val: string): number | null => {
@@ -293,12 +357,20 @@ export default function ProductoFormPage() {
       return isNaN(parsed) ? null : parsed;
     };
 
+    const { idUnidadCompra: finalIdUnidadCompra, factorConversionCompra: finalFactor } =
+      determinarFactorYUnidades({
+        idUnidadBase,
+        idUnidadCompra,
+        factorConversionCompra: validacionFactor.factor,
+      });
+
     const payload = {
       nombre: cleanNombre,
       descripcion: descripcion.trim() || null,
       idUnidadBase: Number(idUnidadBase),
       idUnidadVenta: idUnidadVenta ? Number(idUnidadVenta) : null,
-      idUnidadCompra: idUnidadCompra ? Number(idUnidadCompra) : null,
+      idUnidadCompra: finalIdUnidadCompra,
+      factorConversionCompra: finalFactor,
       codigoBarras: codigoBarras.trim() || null,
       precioUnitarioSugerido: parseIntegerOrNull(precioUnitarioSugerido),
       precioCosto: parseIntegerOrNull(precioCosto),
@@ -313,7 +385,7 @@ export default function ProductoFormPage() {
         await updateProducto(Number(id), payload);
         setExitoMsg('Producto actualizado exitosamente.');
       } else {
-        // Paso 1: Crear producto en el backend (sin proveedores)
+        // Paso 1: Crear producto en el backend (atómico con factorConversionCompra)
         const res = await createProducto(payload);
         const nuevoId = res?.data?.id;
 
@@ -362,6 +434,22 @@ export default function ProductoFormPage() {
       }
     } catch (err: unknown) {
       console.error('[ProductoFormPage] Error al guardar producto:', err);
+
+      // 8 / 8b: Manejo destacado de cualquier error 409 (FACTOR_BLOQUEADO_POR_ORDENES, UNIDAD_BASE_BLOQUEADA_POR_MOVIMIENTOS)
+      if (err instanceof ApiRequestError && err.status === 409) {
+        let detailsArr: Array<{ field?: string; message?: string; count?: number; [key: string]: unknown }> | undefined;
+        if (Array.isArray(err.details)) {
+          detailsArr = err.details as Array<{ field?: string; message?: string; count?: number }>;
+        }
+        setError409({
+          message: err.message || 'No se puede modificar la configuración del producto debido a órdenes o movimientos existentes.',
+          details: detailsArr,
+        });
+        setErrorMsg(null);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
+
       const msg =
         err instanceof ApiRequestError
           ? err.message
@@ -408,6 +496,25 @@ export default function ProductoFormPage() {
         ) : (
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Mensajes de Alerta / Advertencia / Éxito */}
+            {error409 && (
+              <div className="flex items-start gap-3 bg-amber-500/15 border border-amber-500/40 rounded-2xl p-4 text-xs text-amber-200 animate-fade-in shadow-sm">
+                <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                <div className="flex-1 space-y-1.5">
+                  <h3 className="font-bold text-amber-300 text-sm">Cambio no permitido</h3>
+                  <p className="leading-relaxed font-medium">{error409.message}</p>
+                  {error409.details && error409.details.length > 0 && (
+                    <ul className="list-disc pl-4 space-y-1 text-zinc-300 pt-1">
+                      {error409.details.map((item, idx) => (
+                        <li key={idx} className="text-[11px]">
+                          {item.message || (item.field ? `${item.field}: ${item.count ?? ''}` : JSON.stringify(item))}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            )}
+
             {errorMsg && (
               <div className="flex items-start gap-2.5 bg-rose-500/10 border border-rose-500/25 rounded-2xl p-4 text-xs text-rose-400 animate-fade-in">
                 <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
@@ -512,7 +619,7 @@ export default function ProductoFormPage() {
                     <select
                       required
                       value={idUnidadBase}
-                      onChange={(e) => setIdUnidadBase(e.target.value)}
+                      onChange={(e) => handleCambioUnidadBase(e.target.value)}
                       className="w-full px-3.5 py-2.5 bg-zinc-950 border border-zinc-800 focus:border-violet-500 rounded-xl text-xs text-zinc-100 focus:outline-none transition-colors"
                     >
                       <option value="" disabled>
@@ -524,6 +631,11 @@ export default function ProductoFormPage() {
                         </option>
                       ))}
                     </select>
+                    {isEditing && (
+                      <p className="text-[11px] text-zinc-500 mt-1">
+                        No se puede cambiar si el producto ya tiene movimientos.
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -559,7 +671,7 @@ export default function ProductoFormPage() {
                 {/* Precio Venta Sugerido */}
                 <div>
                   <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
-                    Precio de Venta Sugerido ($)
+                    Precio de Venta Sugerido ($){nombreUnidadBase ? ` por ${nombreUnidadBase}` : ''}
                   </label>
                   <input
                     type="number"
@@ -575,7 +687,7 @@ export default function ProductoFormPage() {
                 {/* Precio Costo */}
                 <div>
                   <label className="block text-xs font-semibold text-zinc-300 mb-1">
-                    Precio de Costo ($)
+                    Precio de Costo ($){nombreUnidadBase ? ` por ${nombreUnidadBase}` : ''}
                   </label>
                   <p className="text-[11px] text-zinc-500 mb-1.5">
                     Usado para calcular rentabilidad y márgenes de ganancia.
@@ -621,6 +733,11 @@ export default function ProductoFormPage() {
                 </p>
               </div>
 
+              {/* Bloque de ayuda: regla del sistema */}
+              <div className="bg-zinc-950/70 border border-zinc-800 rounded-xl p-3 text-xs text-zinc-400 leading-relaxed">
+                El stock y las ventas se manejan en la unidad base. Los precios son por unidad base.
+              </div>
+
               <div className="space-y-3.5">
                 {/* Stock de Seguridad */}
                 <div>
@@ -656,6 +773,12 @@ export default function ProductoFormPage() {
                         </option>
                       ))}
                     </select>
+                    {esUnidadVentaDistinta && (
+                      <p className="text-[11px] text-amber-400/90 mt-1.5 flex items-center gap-1 font-medium">
+                        <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                        <span>Hoy el sistema asume que se vende en la unidad base.</span>
+                      </p>
+                    )}
                   </div>
 
                   <div>
@@ -676,6 +799,35 @@ export default function ProductoFormPage() {
                     </select>
                   </div>
                 </div>
+
+                {/* Factor de Conversión de Compra (si la unidad de compra es distinta de la base) */}
+                {esUnidadCompraDistinta && (
+                  <div className="bg-zinc-950/80 border border-zinc-800 rounded-2xl p-4 space-y-2.5 animate-fade-in">
+                    <label className="block text-xs font-semibold text-zinc-200 mb-1">
+                      ¿Cuántas {nombreUnidadBase || 'unidades base'} trae cada{' '}
+                      {nombreUnidadCompra || 'unidad de compra'}? <span className="text-violet-400">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      step="1"
+                      required
+                      value={factorConversionCompra}
+                      onChange={(e) => setFactorConversionCompra(e.target.value)}
+                      placeholder="Ej: 24"
+                      className="w-full px-3.5 py-2.5 bg-zinc-900 border border-zinc-800 focus:border-violet-500 rounded-xl text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none transition-colors font-mono"
+                    />
+                    <p className="text-[11px] text-zinc-500">
+                      Ej.: 1 {nombreUnidadCompra || 'caja'} trae 24 {nombreUnidadBase || 'displays'}.
+                    </p>
+
+                    {vistaPreviaFactor && (
+                      <div className="mt-2.5 p-2.5 bg-violet-500/10 border border-violet-500/25 rounded-xl text-xs text-violet-300 font-medium">
+                        {vistaPreviaFactor}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </section>
 

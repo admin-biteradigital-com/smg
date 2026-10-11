@@ -270,16 +270,52 @@ export interface ErrorRecepcionTraducido {
 }
 
 /**
+ * Formatea el texto de equivalencia para recepción cuando factor_conversion > 1:
+ * "Recibís 5 cajas → ingresan 120 display al stock"
+ */
+export function formatearEquivalenciaRecepcion(params: {
+  cantidad: number;
+  unidadCompra?: string | null;
+  factorConversion?: number | null;
+  unidadBase?: string | null;
+}): string | null {
+  const { cantidad, unidadCompra, factorConversion, unidadBase } = params;
+  if (!factorConversion || factorConversion <= 1) return null;
+  if (cantidad <= 0 || isNaN(cantidad)) return null;
+
+  const uCompra = unidadCompra?.trim() || 'unidades';
+  const uBase = unidadBase?.trim() || 'unidades';
+  const cantBase = Math.round(cantidad * factorConversion);
+
+  return `Recibís ${cantidad} ${uCompra} → ingresan ${cantBase} ${uBase} al stock`;
+}
+
+/**
  * Traduce errores de la API de SIGLO a mensajes claros para el usuario final.
  */
 export function traducirErrorRecepcion(err: unknown): ErrorRecepcionTraducido {
   if (err instanceof ApiRequestError) {
     if (err.code === 'CONVERSION_REQUIRED') {
+      const desc =
+        err.message && err.message !== 'HTTP 400'
+          ? (err.message.includes('Uno de los productos')
+              ? err.message
+              : `${err.message}. Uno de los productos se compra en una unidad distinta de la base y no tiene una conversión definida en el sistema.`)
+          : 'Uno de los productos se compra en una unidad distinta de la base y no tiene una conversión definida en el sistema. Debe configurarse la unidad antes de poder recibirse.';
       return {
         titulo: 'Conversión de unidades no configurada',
-        descripcion:
-          'Uno de los productos se compra en una unidad distinta de la base y no tiene una conversión definida en el sistema. Debe configurarse la unidad antes de poder recibirse.',
+        descripcion: desc,
         esErrorConversion: true,
+      };
+    }
+
+    if (err.code === 'CANTIDAD_BASE_NO_ENTERA') {
+      return {
+        titulo: 'Cantidad base no entera',
+        descripcion:
+          err.message && err.message !== 'HTTP 400'
+            ? err.message
+            : 'La cantidad ingresada produce una cantidad no entera en la unidad base del producto.',
       };
     }
 

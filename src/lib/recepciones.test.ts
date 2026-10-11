@@ -5,6 +5,7 @@ import {
   validarFormularioRecepcion,
   esVencimientoPasado,
   traducirErrorRecepcion,
+  formatearEquivalenciaRecepcion,
   type FilaLoteRecepcion,
 } from './recepciones';
 import { ApiRequestError } from './api';
@@ -411,5 +412,63 @@ describe('ADR-020: Módulo Recepciones — Lógica Pura', () => {
       const traducido = traducirErrorRecepcion(err);
       expect(traducido.detallesCampos).toContain('items.0.numeroLote: El lote es requerido');
     });
+
+    it('debe traducir CANTIDAD_BASE_NO_ENTERA mostrando el mensaje del servidor', () => {
+      const err = new ApiRequestError(
+        400,
+        'CANTIDAD_BASE_NO_ENTERA',
+        'La cantidad de unidades base resultante no es un número entero.'
+      );
+      const traducido = traducirErrorRecepcion(err);
+      expect(traducido.titulo).toBe('Cantidad base no entera');
+      expect(traducido.descripcion).toBe(
+        'La cantidad de unidades base resultante no es un número entero.'
+      );
+    });
+  });
+
+  // ─── 6. Equivalencia de Recepción según Factor ──────────────────────────────
+  describe('formatearEquivalenciaRecepcion', () => {
+    it('retorna texto de equivalencia cuando factor_conversion > 1 y cantidad > 0', () => {
+      const texto = formatearEquivalenciaRecepcion({
+        cantidad: 5,
+        unidadCompra: 'cajas',
+        factorConversion: 24,
+        unidadBase: 'display',
+      });
+      expect(texto).toBe('Recibís 5 cajas → ingresan 120 display al stock');
+    });
+
+    it('retorna null cuando factor_conversion es 1, menor o inexistente', () => {
+      expect(
+        formatearEquivalenciaRecepcion({
+          cantidad: 5,
+          unidadCompra: 'cajas',
+          factorConversion: 1,
+          unidadBase: 'cajas',
+        })
+      ).toBeNull();
+
+      expect(
+        formatearEquivalenciaRecepcion({
+          cantidad: 5,
+          unidadCompra: 'unidades',
+          factorConversion: null,
+          unidadBase: 'unidades',
+        })
+      ).toBeNull();
+    });
+
+    it('retorna null si la cantidad es 0 o menor', () => {
+      expect(
+        formatearEquivalenciaRecepcion({
+          cantidad: 0,
+          unidadCompra: 'cajas',
+          factorConversion: 24,
+          unidadBase: 'display',
+        })
+      ).toBeNull();
+    });
   });
 });
+

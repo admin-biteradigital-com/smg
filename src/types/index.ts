@@ -518,6 +518,9 @@ export interface ProductoAdminItem {
   stockSeguridadMinimo: number | null;
   idUnidadBase: number;
   nombreUnidadBase: string;
+  idUnidadCompra?: number | null;
+  nombreUnidadCompra?: string | null;
+  factorConversionCompra?: number | null;
 }
 
 // ── ADR-019: Relación Producto - Proveedor ───────────────────────────────────
@@ -537,7 +540,10 @@ export interface AsociarProveedorResponse {
 
 export interface ProductoAdminDetalle extends ProductoAdminItem {
   idUnidadVenta: number | null;
+  nombreUnidadVenta?: string | null;
   idUnidadCompra: number | null;
+  nombreUnidadCompra?: string | null;
+  factorConversionCompra?: number | null;
   precioOferta: number | null;
   categoriaWeb: string | null;
   descripcionWeb: string | null;
@@ -772,6 +778,8 @@ export interface LineaOrdenCompraDetalle {
   unidad_compra?: string | null;
   nombre_unidad_compra?: string | null;
   unidad_medida?: string | null;
+  unidad_base?: string | null;
+  factor_conversion?: number | null;
 }
 
 export interface PagoProveedorItem {
@@ -787,6 +795,8 @@ export interface PagoProveedorItem {
 export interface OrdenCompraDetalle extends OrdenCompraItem {
   lineas: LineaOrdenCompraDetalle[];
   pagos: PagoProveedorItem[];
+  total_pagado?: number;
+  saldo_pendiente?: number;
 }
 
 export interface CreatePagoProveedorPayload {

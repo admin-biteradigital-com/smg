@@ -30,6 +30,7 @@ import {
   validarFormularioRecepcion,
   esVencimientoPasado,
   traducirErrorRecepcion,
+  formatearEquivalenciaRecepcion,
   type FilaLoteRecepcion,
   type CalculoDiferenciasRecepcion,
 } from '@/lib/recepciones';
@@ -674,6 +675,18 @@ export default function RecepcionMercaderiaPage() {
             const filasDelProducto = filasAgrupadasPorProducto.get(prodId) || [];
             const dif = calculoDiferencias.resumenPorProducto[prodId];
             const isHighlighted = highlightProductoId === prodId;
+            const prodInfo = productosMap.get(prodId);
+            const factorConversion = linea.factor_conversion || prodInfo?.factorConversionCompra || 1;
+            const unidadBaseNombre = linea.unidad_base || prodInfo?.nombreUnidadBase || 'unidades';
+            const unidadCompraNombre =
+              linea.unidad_compra || linea.nombre_unidad_compra || prodInfo?.nombreUnidadCompra || 'unidades';
+
+            const equivalenciaProducto = formatearEquivalenciaRecepcion({
+              cantidad: dif?.cantidadRecibida || 0,
+              unidadCompra: filasDelProducto[0]?.unidadCompra || unidadCompraNombre,
+              factorConversion,
+              unidadBase: unidadBaseNombre,
+            });
 
             return (
               <div
@@ -712,7 +725,7 @@ export default function RecepcionMercaderiaPage() {
                     <div
                       className={`border px-3 py-1.5 rounded-xl ${
                         dif?.noRecibido
-                          ? 'bg-rose-500/10 border-rose-500/30 text-rose-300'
+                           ? 'bg-rose-500/10 border-rose-500/30 text-rose-300'
                           : dif?.tieneDiferencia
                           ? 'bg-amber-500/10 border-amber-500/30 text-amber-300'
                           : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
@@ -727,6 +740,14 @@ export default function RecepcionMercaderiaPage() {
                     </div>
                   </div>
                 </div>
+
+                {/* Equivalencia a stock base por producto cuando factor_conversion > 1 */}
+                {equivalenciaProducto && (
+                  <div className="p-2.5 rounded-xl text-xs bg-emerald-500/10 border border-emerald-500/25 text-emerald-300 font-medium flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4 shrink-0 text-emerald-400" />
+                    <span>{equivalenciaProducto}</span>
+                  </div>
+                )}
 
                 {/* Aviso si la suma difiere o es 0 */}
                 {dif?.tieneDiferencia && (
@@ -753,6 +774,13 @@ export default function RecepcionMercaderiaPage() {
                   {filasDelProducto.map((fila, idx) => {
                     const errFila = erroresPorFila[fila.idFila] || {};
                     const esVencido = esVencimientoPasado(fila.fechaVencimiento, hoyStr);
+                    const cantLote = Number(fila.cantidadRecibida);
+                    const equivalenciaLote = formatearEquivalenciaRecepcion({
+                      cantidad: cantLote,
+                      unidadCompra: fila.unidadCompra || unidadCompraNombre,
+                      factorConversion,
+                      unidadBase: unidadBaseNombre,
+                    });
 
                     return (
                       <div
@@ -801,6 +829,11 @@ export default function RecepcionMercaderiaPage() {
                             />
                             {errFila.cantidad && (
                               <p className="text-[10px] text-rose-400 mt-1">{errFila.cantidad}</p>
+                            )}
+                            {equivalenciaLote && (
+                              <p className="text-[11px] text-emerald-400 font-medium mt-1">
+                                {equivalenciaLote}
+                              </p>
                             )}
                           </div>
 

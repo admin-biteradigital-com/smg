@@ -20,6 +20,7 @@ import {
 import BarcodeScannerModal, { isBarcodeScannerSupported } from '@/components/gestion/BarcodeScannerModal';
 import { getProductosAdmin, ApiRequestError } from '@/lib/api';
 import type { ProductoAdminItem } from '@/types';
+import { formatearResumenFactorListado } from '@/lib/productos';
 
 // TODO: BarcodeDetector no funciona en iOS Safari — evaluar @zxing/browser si se necesita soporte cross-browser
 
@@ -276,6 +277,21 @@ export default function ProductosListPage() {
                         <span className="text-[11px] text-zinc-400 bg-zinc-800/80 px-2 py-0.5 rounded-md border border-zinc-700/50">
                           {prod.nombreUnidadBase || 'Unidad'}
                         </span>
+
+                        {/* Factor de compra si existe */}
+                        {(() => {
+                          const resumenCompra = formatearResumenFactorListado({
+                            nombreUnidadCompra: prod.nombreUnidadCompra,
+                            factor: prod.factorConversionCompra,
+                            nombreUnidadBase: prod.nombreUnidadBase,
+                          });
+                          if (!resumenCompra) return null;
+                          return (
+                            <span className="text-[11px] text-zinc-400 bg-zinc-800/80 px-2 py-0.5 rounded-md border border-zinc-700/50">
+                              {resumenCompra}
+                            </span>
+                          );
+                        })()}
 
                         {/* Precio Costo si existe */}
                         {prod.precioCosto !== null && (
