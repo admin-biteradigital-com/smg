@@ -3,6 +3,7 @@ import type {
   OrdenCompraEstadoPago,
   OrdenCompraCondicionPago,
   ProveedorProductoItem,
+  ProductoAdminItem,
 } from '@/types';
 
 // ─── Días Hábiles ─────────────────────────────────────────────────────────────
@@ -217,6 +218,57 @@ export function resolverSeleccionProveedor(
     accion: 'multiples_proveedores',
     proveedores: lista,
   };
+}
+
+// ─── Selector de Productos en Órdenes de Compra ──────────────────────────────
+
+/**
+ * Filtra y ordena el catálogo de productos para el selector de órdenes de compra.
+ * - Siempre ordena alfabéticamente por nombre (locale 'es', insensible a mayúsculas/minúsculas).
+ * - Sin término de búsqueda: retorna la lista completa sin recortar (sin tope).
+ * - Con término de búsqueda: busca coincidencias parciales en nombre o código de barras sobre el total de productos.
+ * - Incluye productos sin costo y sin proveedor (no filtra por esos atributos).
+ */
+export function filtrarYOrdenarProductosSelector(
+  productos: ProductoAdminItem[],
+  busqueda?: string
+): ProductoAdminItem[] {
+  if (!Array.isArray(productos) || productos.length === 0) {
+    return [];
+  }
+
+  const term = (busqueda || '').trim().toLowerCase();
+
+  const filtrados = term
+    ? productos.filter((p) => {
+        const matchNombre = p.nombre ? p.nombre.toLowerCase().includes(term) : false;
+        const matchCodigo = p.codigoBarras
+          ? p.codigoBarras.toLowerCase().includes(term)
+          : false;
+        return matchNombre || matchCodigo;
+      })
+    : [...productos];
+
+  return filtrados.sort((a, b) =>
+    (a.nombre || '').localeCompare(b.nombre || '', 'es', { sensitivity: 'base' })
+  );
+}
+
+/**
+ * Genera el texto descriptivo del estado visible del selector de productos.
+ * Ejemplos:
+ * - Sin proveedor: "Todos los productos (42)"
+ * - Con proveedor: "Productos de Distribuidora Central (15)"
+ */
+export function obtenerEtiquetaCatalogo(
+  nombreProveedor: string | null | undefined,
+  total: number
+): string {
+  const count = typeof total === 'number' && !isNaN(total) && total >= 0 ? total : 0;
+  if (!nombreProveedor || !nombreProveedor.trim()) {
+    return `Todos los productos (${count})`;
+  }
+  return `Productos de ${nombreProveedor.trim()} (${count})`;
 }
 
 // ─── Formateo de Fechas (compatible con SQLite y formato ISO) ─────────────────

@@ -11,7 +11,10 @@ import {
   calcularCostoInicialCompra,
   formatearDetalleEquivalenciaLinea,
   resolverSeleccionProveedor,
+  filtrarYOrdenarProductosSelector,
+  obtenerEtiquetaCatalogo,
 } from './compras';
+import type { ProductoAdminItem } from '@/types';
 
 describe('ADR-020: Módulo Compras — Lógica Pura', () => {
   describe('sugerirFechaEntregaEstimada (días hábiles)', () => {
@@ -353,6 +356,82 @@ describe('ADR-020: Módulo Compras — Lógica Pura', () => {
       expect(formatCLP(15000)).toBe('$15.000');
       expect(formatCLP(0)).toBe('$0');
       expect(formatCLP(null)).toBe('$0');
+    });
+  });
+
+  describe('filtrarYOrdenarProductosSelector y obtenerEtiquetaCatalogo', () => {
+    // Catálogo con 35 productos para verificar que supera el límite previo de 30
+    const mockCatalogo: ProductoAdminItem[] = [
+      { id: 1, nombre: 'Zumo Naranja 1L', codigoBarras: '7801001', precioCosto: 800, activo: 1, visiblePublico: 1, idUnidadBase: 1, nombreUnidadBase: 'unidad', stockSeguridadMinimo: null, precioUnitarioSugerido: null, precioPublico: null, descripcion: null },
+      { id: 2, nombre: 'Aceite Maravilla 900ml', codigoBarras: '7801002', precioCosto: 1500, activo: 1, visiblePublico: 1, idUnidadBase: 1, nombreUnidadBase: 'unidad', stockSeguridadMinimo: null, precioUnitarioSugerido: null, precioPublico: null, descripcion: null },
+      { id: 3, nombre: 'PRUEBA CAJA', codigoBarras: '7809901', precioCosto: 12000, activo: 1, visiblePublico: 1, idUnidadBase: 1, nombreUnidadBase: 'unidad', idUnidadCompra: 2, nombreUnidadCompra: 'caja', factorConversionCompra: 24, stockSeguridadMinimo: null, precioUnitarioSugerido: null, precioPublico: null, descripcion: null },
+      { id: 4, nombre: 'PRUEBA SIN PROV', codigoBarras: null, precioCosto: null, activo: 1, visiblePublico: 1, idUnidadBase: 1, nombreUnidadBase: 'unidad', stockSeguridadMinimo: null, precioUnitarioSugerido: null, precioPublico: null, descripcion: null },
+      { id: 5, nombre: 'Freegells Menta', codigoBarras: '7801005', precioCosto: 250, activo: 1, visiblePublico: 1, idUnidadBase: 1, nombreUnidadBase: 'unidad', stockSeguridadMinimo: null, precioUnitarioSugerido: null, precioPublico: null, descripcion: null },
+      ...Array.from({ length: 30 }, (_, i) => ({
+        id: 10 + i,
+        nombre: `Galletas Variedad ${String(i + 1).padStart(2, '0')}`,
+        codigoBarras: `78020${String(i + 1).padStart(2, '0')}`,
+        precioCosto: 500 + i * 10,
+        activo: 1,
+        visiblePublico: 1,
+        idUnidadBase: 1,
+        nombreUnidadBase: 'unidad',
+        stockSeguridadMinimo: null,
+        precioUnitarioSugerido: null,
+        precioPublico: null,
+        descripcion: null,
+      })),
+    ];
+
+    it('sin texto devuelve todos los productos (más de 30) sin recortar', () => {
+      expect(mockCatalogo.length).toBe(35);
+      const resultado = filtrarYOrdenarProductosSelector(mockCatalogo, '');
+      expect(resultado).toHaveLength(35);
+      expect(resultado.length).toBeGreaterThan(30);
+    });
+
+    it('sin texto ordena alfabéticamente por nombre', () => {
+      const resultado = filtrarYOrdenarProductosSelector(mockCatalogo, '');
+      expect(resultado[0].nombre).toBe('Aceite Maravilla 900ml');
+      expect(resultado[resultado.length - 1].nombre).toBe('Zumo Naranja 1L');
+    });
+
+    it('con texto filtra sobre todos los productos, sin recortar a un subconjunto previo', () => {
+      const resultado = filtrarYOrdenarProductosSelector(mockCatalogo, 'PRU');
+      expect(resultado).toHaveLength(2);
+      expect(resultado.map((p) => p.nombre)).toEqual(['PRUEBA CAJA', 'PRUEBA SIN PROV']);
+    });
+
+    it('filtra por código de barras sobre todos los productos', () => {
+      const resultado = filtrarYOrdenarProductosSelector(mockCatalogo, '7809901');
+      expect(resultado).toHaveLength(1);
+      expect(resultado[0].nombre).toBe('PRUEBA CAJA');
+    });
+
+    it('incluye productos sin costo y productos sin proveedor', () => {
+      const resultado = filtrarYOrdenarProductosSelector(mockCatalogo, 'SIN PROV');
+      expect(resultado).toHaveLength(1);
+      expect(resultado[0].nombre).toBe('PRUEBA SIN PROV');
+      expect(resultado[0].precioCosto).toBeNull();
+    });
+
+    it('obtenerEtiquetaCatalogo muestra "Todos los productos (N)" cuando no hay proveedor', () => {
+      expect(obtenerEtiquetaCatalogo(undefined, 35)).toBe('Todos los productos (35)');
+      expect(obtenerEtiquetaCatalogo(null, 0)).toBe('Todos los productos (0)');
+      expect(obtenerEtiquetaCatalogo('', 12)).toBe('Todos los productos (12)');
+    });
+
+    it('obtenerEtiquetaCatalogo muestra "Productos de [proveedor] (N)" cuando hay proveedor seleccionado', () => {
+      expect(obtenerEtiquetaCatalogo('Distribuidora Los Lagos', 18)).toBe(
+        'Productos de Distribuidora Los Lagos (18)'
+      );
+      expect(obtenerEtiquetaCatalogo('Arcor Chile', 0)).toBe('Productos de Arcor Chile (0)');
+    });
+
+    it('maneja catálogos vacíos o inválidos sin fallar', () => {
+      expect(filtrarYOrdenarProductosSelector([])).toEqual([]);
+      expect(filtrarYOrdenarProductosSelector(null as unknown as ProductoAdminItem[])).toEqual([]);
+      expect(obtenerEtiquetaCatalogo(undefined, -5)).toBe('Todos los productos (0)');
     });
   });
 });

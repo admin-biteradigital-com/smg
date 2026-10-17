@@ -15,6 +15,7 @@ import {
   Package,
   AlertTriangle,
   X,
+  RefreshCw,
 } from 'lucide-react';
 import BarcodeScannerModal from '@/components/gestion/BarcodeScannerModal';
 import {
@@ -33,6 +34,8 @@ import {
   calcularCostoInicialCompra,
   formatearDetalleEquivalenciaLinea,
   resolverSeleccionProveedor,
+  filtrarYOrdenarProductosSelector,
+  obtenerEtiquetaCatalogo,
 } from '@/lib/compras';
 import type {
   ProveedorAdminItem,
@@ -417,16 +420,21 @@ export default function OrdenCompraFormPage() {
     return lineas.reduce((acc, l) => acc + (l.cantidad * (l.precio_unitario_acordado || 0)), 0);
   }, [lineas]);
 
-  // Productos filtrados para el selector
+  // Proveedor seleccionado actual (si aplica)
+  const proveedorActual = useMemo(
+    () => proveedores.find((p) => p.id === idProveedor),
+    [proveedores, idProveedor]
+  );
+
+  // Productos filtrados y ordenados para el selector (sin tope duro)
   const productosFiltradosSelector = useMemo(() => {
-    const term = busquedaProducto.trim().toLowerCase();
-    if (!term) return productosDisponibles.slice(0, 30);
-    return productosDisponibles.filter(
-      (p) =>
-        p.nombre.toLowerCase().includes(term) ||
-        (p.codigoBarras && p.codigoBarras.toLowerCase().includes(term))
-    );
+    return filtrarYOrdenarProductosSelector(productosDisponibles, busquedaProducto);
   }, [productosDisponibles, busquedaProducto]);
+
+  // Etiqueta del estado visible del catálogo
+  const etiquetaEstadoCatalogo = useMemo(() => {
+    return obtenerEtiquetaCatalogo(proveedorActual?.nombre, productosFiltradosSelector.length);
+  }, [proveedorActual, productosFiltradosSelector.length]);
 
   // Envío del Formulario
   const handleSubmit = async (e: React.FormEvent) => {
@@ -683,7 +691,16 @@ export default function OrdenCompraFormPage() {
 
                 <button
                   type="button"
-                  onClick={() => setSelectorAbierto((prev) => !prev)}
+                  onClick={() => {
+                    setSelectorAbierto((prev) => {
+                      const next = !prev;
+                      if (next) {
+                        const provId = typeof idProveedor === 'number' && idProveedor > 0 ? idProveedor : undefined;
+                        loadProductos(provId);
+                      }
+                      return next;
+                    });
+                  }}
                   className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 shadow-md"
                 >
                   <Plus className="w-3.5 h-3.5" />
@@ -695,17 +712,25 @@ export default function OrdenCompraFormPage() {
             {/* Panel Selector de Producto desplegable */}
             {selectorAbierto && (
               <div className="bg-zinc-950/80 border border-zinc-700/80 rounded-2xl p-4 space-y-3 animate-fade-in">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-white">Catálogo de Productos</span>
-                  {idProveedor ? (
-                    <span className="text-[10px] text-zinc-400 font-medium">
-                      Filtrado por proveedor actual
-                    </span>
-                  ) : (
-                    <span className="text-[10px] text-zinc-400 font-medium italic">
-                      Catálogo completo
-                    </span>
-                  )}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-white">Catálogo de Productos</span>
+                    <button
+                      type="button"
+                      title="Recargar catálogo de productos"
+                      onClick={() => {
+                        const provId = typeof idProveedor === 'number' && idProveedor > 0 ? idProveedor : undefined;
+                        loadProductos(provId);
+                      }}
+                      disabled={cargandoProductos}
+                      className="p-1 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors disabled:opacity-40"
+                    >
+                      <RefreshCw className={`w-3 h-3 ${cargandoProductos ? 'animate-spin text-rose-400' : ''}`} />
+                    </button>
+                  </div>
+                  <span className="text-[11px] font-medium text-zinc-300 bg-zinc-800/80 border border-zinc-700/60 px-2.5 py-0.5 rounded-lg truncate max-w-full sm:max-w-xs">
+                    {etiquetaEstadoCatalogo}
+                  </span>
                 </div>
 
                 {/* Input de Búsqueda */}
@@ -721,7 +746,7 @@ export default function OrdenCompraFormPage() {
                 </div>
 
                 {/* Lista de productos para seleccionar */}
-                <div className="max-h-56 overflow-y-auto space-y-1.5 divide-y divide-zinc-800/60 pr-1">
+                <div className="max-h-72 sm:max-h-80 overflow-y-auto space-y-1.5 divide-y divide-zinc-800/60 pr-1 overscroll-contain">
                   {cargandoProductos || resolviendoProveedor ? (
                     <div className="py-6 flex items-center justify-center text-zinc-500 text-xs gap-2">
                       <Loader2 className="w-4 h-4 animate-spin text-rose-400" />
@@ -746,9 +771,9 @@ export default function OrdenCompraFormPage() {
                           key={prod.id}
                           className="pt-1.5 flex items-center justify-between gap-3 text-xs"
                         >
-                          <div className="min-w-0">
+                          <div className="min-w-0 flex-1">
                             <p className="font-semibold text-zinc-200 truncate">{prod.nombre}</p>
-                            <div className="flex items-center gap-2 text-[10px] text-zinc-400">
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-zinc-400">
                               {prod.codigoBarras && <span>Cod: {prod.codigoBarras}</span>}
                               <span>
                                 {costoRef !== null
