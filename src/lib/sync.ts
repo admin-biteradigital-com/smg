@@ -442,6 +442,7 @@ interface BackendCliente {
   id: number;
   razonSocial: string;
   rut: string;
+  nombreFantasia?: string | null;
   segmento: string | null;
   limiteCredito: number;
   cicloReabastecimientoDias: number | null;
@@ -520,6 +521,7 @@ export function mapCliente(c: BackendCliente, generatedAt: string): Cliente {
     id: String(c.id),
     rut: c.rut,
     razonSocial: c.razonSocial,
+    nombreFantasia: c.nombreFantasia ?? undefined,
     tipo: 'minorista',
     estado: c.activo ? 'activo' : 'inactivo',
     empresaId: '',

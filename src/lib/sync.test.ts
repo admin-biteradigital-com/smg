@@ -78,7 +78,7 @@ describe('Master Data Sync - Mapping helpers', () => {
     expect(mapped.marca).toBe('Don Satur');
   });
 
-  it('maps BackendCliente to frontend Cliente correctly', () => {
+  it('maps BackendCliente to frontend Cliente correctly (backend sin nombreFantasia)', () => {
     const backendCli = {
       id: 1,
       razonSocial: 'Minimarket Los Alerces',
@@ -92,10 +92,68 @@ describe('Master Data Sync - Mapping helpers', () => {
 
     const mapped = mapCliente(backendCli, timestamp);
 
+    expect(mapped.nombreFantasia).toBeUndefined();
     expect(mapped).toEqual({
       id: '1',
       rut: '76123456-7',
       razonSocial: 'Minimarket Los Alerces',
+      nombreFantasia: undefined,
+      tipo: 'minorista',
+      estado: 'activo',
+      empresaId: '',
+      updatedAt: timestamp,
+    });
+  });
+
+  it('maps BackendCliente with nombreFantasia correctly', () => {
+    const backendCli = {
+      id: 2,
+      razonSocial: 'Sociedad Comercial Don Pepe SpA',
+      rut: '77987654-3',
+      nombreFantasia: 'Kiosco Don Pepe',
+      segmento: 'Kiosco',
+      limiteCredito: 300000,
+      cicloReabastecimientoDias: 3,
+      activo: true,
+      sucursales: [],
+    };
+
+    const mapped = mapCliente(backendCli, timestamp);
+
+    expect(mapped.nombreFantasia).toBe('Kiosco Don Pepe');
+    expect(mapped).toEqual({
+      id: '2',
+      rut: '77987654-3',
+      razonSocial: 'Sociedad Comercial Don Pepe SpA',
+      nombreFantasia: 'Kiosco Don Pepe',
+      tipo: 'minorista',
+      estado: 'activo',
+      empresaId: '',
+      updatedAt: timestamp,
+    });
+  });
+
+  it('maps BackendCliente with null nombreFantasia to undefined without error', () => {
+    const backendCli = {
+      id: 3,
+      razonSocial: 'Distribuidora Central Ltda',
+      rut: '78111222-3',
+      nombreFantasia: null,
+      segmento: 'Mayorista',
+      limiteCredito: 1000000,
+      cicloReabastecimientoDias: 14,
+      activo: true,
+      sucursales: [],
+    };
+
+    const mapped = mapCliente(backendCli, timestamp);
+
+    expect(mapped.nombreFantasia).toBeUndefined();
+    expect(mapped).toEqual({
+      id: '3',
+      rut: '78111222-3',
+      razonSocial: 'Distribuidora Central Ltda',
+      nombreFantasia: undefined,
       tipo: 'minorista',
       estado: 'activo',
       empresaId: '',
