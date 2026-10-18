@@ -7,6 +7,10 @@ import {
   validarCondicionPago,
   formatFecha,
   formatFechaHora,
+  formatSoloFecha,
+  formatInstanteFecha,
+  formatInstanteFechaHora,
+  getHoyString,
   formatCLP,
   calcularCostoInicialCompra,
   formatearDetalleEquivalenciaLinea,
@@ -332,24 +336,58 @@ describe('ADR-020: Módulo Compras — Lógica Pura', () => {
     });
   });
 
-  describe('Formateo seguro de fechas (SQLite e ISO)', () => {
-    it('debe formatear correctamente fecha ISO', () => {
-      expect(formatFecha('2026-10-04T12:00:00Z')).toBe('04/10/2026');
+  describe('Formateo seguro de fechas e instantes UTC', () => {
+    const tzMontevideo = 'America/Montevideo';
+
+    it('instante ISO con Z en huso UTC-3 (Montevideo): 2026-10-18T00:30:00.000Z se muestra como 17/10/2026 21:30', () => {
+      expect(formatInstanteFecha('2026-10-18T00:30:00.000Z', tzMontevideo)).toBe('17/10/2026');
+      expect(formatInstanteFechaHora('2026-10-18T00:30:00.000Z', tzMontevideo)).toBe('17/10/2026 21:30');
+      expect(formatFecha('2026-10-18T00:30:00.000Z', tzMontevideo)).toBe('17/10/2026');
     });
 
-    it('debe formatear correctamente fecha SQLite YYYY-MM-DD HH:MM:SS', () => {
-      expect(formatFecha('2026-10-04 15:30:00')).toBe('04/10/2026');
-      expect(formatFechaHora('2026-10-04 15:30:00')).toBe('04/10/2026 15:30');
+    it('instante SQLite datetime sin zona (en UTC): 2026-10-18 00:30:00 se interpreta en UTC y se muestra como 17/10/2026 21:30', () => {
+      expect(formatInstanteFecha('2026-10-18 00:30:00', tzMontevideo)).toBe('17/10/2026');
+      expect(formatInstanteFechaHora('2026-10-18 00:30:00', tzMontevideo)).toBe('17/10/2026 21:30');
+      expect(formatFecha('2026-10-18 00:30:00', tzMontevideo)).toBe('17/10/2026');
     });
 
-    it('debe manejar fecha solo YYYY-MM-DD', () => {
-      expect(formatFecha('2026-10-04')).toBe('04/10/2026');
+    it('solo fecha YYYY-MM-DD: 2026-12-15 se muestra como 15/12/2026 sin conversion de zona', () => {
+      expect(formatSoloFecha('2026-12-15')).toBe('15/12/2026');
+      expect(formatFecha('2026-12-15')).toBe('15/12/2026');
     });
 
     it('debe retornar guion ante fechas nulas o vacias', () => {
+      expect(formatSoloFecha(null)).toBe('—');
+      expect(formatSoloFecha('')).toBe('—');
+      expect(formatInstanteFecha(null)).toBe('—');
+      expect(formatInstanteFechaHora(undefined)).toBe('—');
       expect(formatFecha(null)).toBe('—');
-      expect(formatFecha('')).toBe('—');
       expect(formatFechaHora(undefined)).toBe('—');
+    });
+
+    it('esPagoVencido cerca de la medianoche con fecha calendario local', () => {
+      const orden = {
+        condicion_pago: 'credito',
+        estado_pago: 'pendiente',
+        fecha_vencimiento_pago: '2026-10-18',
+        estado: 'recibida',
+      };
+
+      // 17/10 a las 23:59 local (un minuto antes de la medianoche previa al vencimiento)
+      const antesDeMedianoche = new Date(2026, 9, 17, 23, 59, 0);
+      expect(esPagoVencido(orden, getHoyString(antesDeMedianoche))).toBe(false);
+
+      // 18/10 a las 00:01 local (justo iniciada la fecha de vencimiento: vence hoy, no vencido aún)
+      const inicioDiaVencimiento = new Date(2026, 9, 18, 0, 1, 0);
+      expect(esPagoVencido(orden, getHoyString(inicioDiaVencimiento))).toBe(false);
+
+      // 18/10 a las 23:59 local (último minuto del día de vencimiento)
+      const finDiaVencimiento = new Date(2026, 9, 18, 23, 59, 0);
+      expect(esPagoVencido(orden, getHoyString(finDiaVencimiento))).toBe(false);
+
+      // 19/10 a las 00:01 local (un minuto después de medianoche, vencido)
+      const diaSiguiente = new Date(2026, 9, 19, 0, 1, 0);
+      expect(esPagoVencido(orden, getHoyString(diaSiguiente))).toBe(true);
     });
   });
 

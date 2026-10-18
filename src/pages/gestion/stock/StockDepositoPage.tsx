@@ -28,6 +28,7 @@ import {
 } from '@/lib/api';
 import type { StockDepositoItem } from '@/lib/api';
 import type { ProductoAdminItem } from '@/types';
+import { formatSoloFecha } from '@/lib/compras';
 
 // ─── StockDepositoPage ────────────────────────────────────────────────────────
 // Ruta: /gestion/stock
@@ -336,15 +337,7 @@ export default function StockDepositoPage() {
   };
 
   // ─── Helpers ────────────────────────────────────────────────────────────────
-
-  const formatFecha = (iso: string) => {
-    try {
-      const [y, m, d] = iso.split('-');
-      return `${d}/${m}/${y}`;
-    } catch {
-      return iso;
-    }
-  };
+  const formatFecha = formatSoloFecha;
 
   // ─── Render ─────────────────────────────────────────────────────────────────
 

@@ -23,6 +23,7 @@ import {
   ApiRequestError,
 } from '@/lib/api';
 import type { SaldoCliente, VentaPendiente } from '@/types';
+import { formatFecha } from '@/lib/compras';
 
 type MetodoPagoCobro = 'efectivo' | 'transferencia' | 'cheque' | 'pago_online';
 
@@ -211,19 +212,7 @@ export default function CuentasCorrientesPage() {
     }
   };
 
-  const formatearFecha = (fechaStr: string) => {
-    try {
-      const d = new Date(fechaStr);
-      if (isNaN(d.getTime())) return fechaStr;
-      return d.toLocaleDateString('es-CL', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-      });
-    } catch {
-      return fechaStr;
-    }
-  };
+  const formatearFecha = formatFecha;
 
   const totalDeudaGlobal = clientes.reduce(
     (acc, c) => acc + (c.saldoPendienteTotal || 0),

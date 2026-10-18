@@ -29,8 +29,9 @@ import {
 } from '@/lib/api';
 import {
   formatCLP,
-  formatFecha,
-  formatFechaHora,
+  formatSoloFecha,
+  formatInstanteFecha,
+  formatInstanteFechaHora,
   calcularSaldoOrden,
   esPagoVencido,
   esEntregaDemorada,
@@ -469,13 +470,13 @@ export default function OrdenCompraDetallePage() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3 border-t border-zinc-800 text-xs">
             <div className="space-y-0.5">
               <span className="text-[11px] text-zinc-400">Fecha Creación</span>
-              <p className="font-semibold text-zinc-200">{formatFecha(orden.fecha_creacion)}</p>
+              <p className="font-semibold text-zinc-200">{formatInstanteFecha(orden.fecha_creacion)}</p>
             </div>
 
             <div className="space-y-0.5">
               <span className="text-[11px] text-zinc-400">Entrega Estimada</span>
               <p className="font-semibold text-zinc-200">
-                {orden.fecha_entrega_estimada ? formatFecha(orden.fecha_entrega_estimada) : 'Sin fecha'}
+                {orden.fecha_entrega_estimada ? formatSoloFecha(orden.fecha_entrega_estimada) : 'Sin fecha'}
               </p>
             </div>
 
@@ -486,7 +487,7 @@ export default function OrdenCompraDetallePage() {
                 {orden.condicion_pago === 'credito' && (
                   <span className="block text-[11px] text-zinc-400 font-normal">
                     {orden.fecha_vencimiento_pago
-                      ? `Vence: ${formatFecha(orden.fecha_vencimiento_pago)}`
+                      ? `Vence: ${formatSoloFecha(orden.fecha_vencimiento_pago)}`
                       : 'Vencimiento sin cargar'}
                   </span>
                 )}
@@ -607,7 +608,7 @@ export default function OrdenCompraDetallePage() {
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-bold text-white">
                       {orden.fecha_vencimiento_pago
-                        ? formatFecha(orden.fecha_vencimiento_pago)
+                        ? formatSoloFecha(orden.fecha_vencimiento_pago)
                         : 'Sin cargar'}
                     </span>
                     {!orden.fecha_vencimiento_pago && (
@@ -765,7 +766,7 @@ export default function OrdenCompraDetallePage() {
                       </span>
                     </div>
                     <p className="text-[11px] text-zinc-400">
-                      Fecha de pago: <strong className="text-zinc-300 font-medium">{formatFecha(pago.fecha_pago)}</strong>
+                      Fecha de pago: <strong className="text-zinc-300 font-medium">{formatSoloFecha(pago.fecha_pago)}</strong>
                     </p>
                   </div>
 
@@ -774,7 +775,7 @@ export default function OrdenCompraDetallePage() {
                       <User className="w-3 h-3 text-zinc-500" />
                       <span>{pago.registrado_por || 'Sistema'}</span>
                     </p>
-                    <p className="text-zinc-500">Reg: {formatFechaHora(pago.creado_en)}</p>
+                    <p className="text-zinc-500">Reg: {formatInstanteFechaHora(pago.creado_en)}</p>
                   </div>
                 </div>
               ))

@@ -48,10 +48,9 @@ export function sugerirFechaEntregaEstimada(
 }
 
 /**
- * Retorna la fecha de hoy en formato YYYY-MM-DD.
+ * Retorna la fecha de hoy en formato local YYYY-MM-DD del dispositivo.
  */
-export function getHoyString(): string {
-  const now = new Date();
+export function getHoyString(now = new Date()): string {
   const yyyy = now.getFullYear();
   const mm = String(now.getMonth() + 1).padStart(2, '0');
   const dd = String(now.getDate()).padStart(2, '0');
@@ -348,56 +347,126 @@ export function obtenerEtiquetaCatalogo(
   return `Productos de ${nombreProveedor.trim()} (${count})`;
 }
 
-// ─── Formateo de Fechas (compatible con SQLite y formato ISO) ─────────────────
+// ─── Formateo de Fechas (compatible con SQLite UTC, ISO UTC y Solo Fecha) ─────
 
 /**
- * Parsea con seguridad fechas SQLite ('2026-10-04 15:30:00') o ISO ('2026-10-04T15:30:00Z').
+ * Parsea un instante UTC proveniente de SIGLO:
+ * - Formato ISO con zona: "2026-10-18T00:30:00.000Z"
+ * - Formato SQLite datetime sin zona (en UTC): "2026-10-18 00:30:00"
+ * Siempre lo interpreta explícitamente en UTC.
  */
-export function parseFechaSegura(fechaStr?: string | null): Date | null {
+export function parseInstanteUTC(fechaStr?: string | null): Date | null {
   if (!fechaStr) return null;
   const trimmed = fechaStr.trim();
   if (!trimmed) return null;
 
-  // Regex para formato YYYY-MM-DD [HH:MM[:SS]]
-  const match = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?/);
-  if (match) {
-    const year = Number(match[1]);
-    const month = Number(match[2]) - 1;
-    const day = Number(match[3]);
-    const hour = match[4] ? Number(match[4]) : 0;
-    const minute = match[5] ? Number(match[5]) : 0;
-    const second = match[6] ? Number(match[6]) : 0;
-    return new Date(year, month, day, hour, minute, second);
+  // Formato SQLite datetime: 'YYYY-MM-DD HH:MM:SS' o 'YYYY-MM-DD HH:MM'
+  const matchSqlite = trimmed.match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})(?::(\d{2}))?$/);
+  if (matchSqlite) {
+    const year = Number(matchSqlite[1]);
+    const month = Number(matchSqlite[2]) - 1;
+    const day = Number(matchSqlite[3]);
+    const hour = Number(matchSqlite[4]);
+    const minute = Number(matchSqlite[5]);
+    const second = matchSqlite[6] ? Number(matchSqlite[6]) : 0;
+    return new Date(Date.UTC(year, month, day, hour, minute, second));
   }
 
-  const d = new Date(trimmed);
+  // Formato ISO: si tiene 'T' pero carece de sufijo 'Z' u offset (+/-), agregar 'Z'
+  let iso = trimmed;
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?$/.test(trimmed)) {
+    iso = `${trimmed}Z`;
+  }
+
+  const d = new Date(iso);
   return isNaN(d.getTime()) ? null : d;
 }
 
+export const parseFechaSegura = parseInstanteUTC;
+
 /**
- * Formatea una fecha a DD/MM/YYYY.
+ * Formatea un campo que es exclusivamente una fecha de calendario ('YYYY-MM-DD').
+ * Muestra el mismo día calendario que viene del servidor, sin ninguna conversión de zona.
  */
-export function formatFecha(fechaStr?: string | null): string {
-  const d = parseFechaSegura(fechaStr);
-  if (!d) return '—';
-  const dd = String(d.getDate()).padStart(2, '0');
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const yyyy = d.getFullYear();
+export function formatSoloFecha(fechaStr?: string | null): string {
+  if (!fechaStr) return '—';
+  const trimmed = fechaStr.trim();
+  if (!trimmed) return '—';
+
+  const match = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return '—';
+
+  const yyyy = match[1];
+  const mm = match[2];
+  const dd = match[3];
   return `${dd}/${mm}/${yyyy}`;
 }
 
 /**
- * Formatea una fecha y hora a DD/MM/YYYY HH:mm.
+ * Formatea un instante UTC a fecha en la zona horaria del dispositivo (DD/MM/YYYY).
+ * Permite especificar timeZone para tests puros (ej: 'America/Montevideo').
  */
-export function formatFechaHora(fechaStr?: string | null): string {
-  const d = parseFechaSegura(fechaStr);
+export function formatInstanteFecha(fechaStr?: string | null, timeZone?: string): string {
+  const d = parseInstanteUTC(fechaStr);
   if (!d) return '—';
-  const dd = String(d.getDate()).padStart(2, '0');
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const yyyy = d.getFullYear();
-  const hh = String(d.getHours()).padStart(2, '0');
-  const min = String(d.getMinutes()).padStart(2, '0');
-  return `${dd}/${mm}/${yyyy} ${hh}:${min}`;
+
+  const formatter = new Intl.DateTimeFormat('es-CL', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    timeZone,
+  });
+
+  const parts = formatter.formatToParts(d);
+  const day = parts.find((p) => p.type === 'day')?.value || '';
+  const month = parts.find((p) => p.type === 'month')?.value || '';
+  const year = parts.find((p) => p.type === 'year')?.value || '';
+  return `${day}/${month}/${year}`;
+}
+
+/**
+ * Formatea un instante UTC a fecha y hora en la zona horaria del dispositivo (DD/MM/YYYY HH:mm).
+ * Permite especificar timeZone para tests puros (ej: 'America/Montevideo').
+ */
+export function formatInstanteFechaHora(fechaStr?: string | null, timeZone?: string): string {
+  const d = parseInstanteUTC(fechaStr);
+  if (!d) return '—';
+
+  const formatter = new Intl.DateTimeFormat('es-CL', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone,
+  });
+
+  const parts = formatter.formatToParts(d);
+  const day = parts.find((p) => p.type === 'day')?.value || '';
+  const month = parts.find((p) => p.type === 'month')?.value || '';
+  const year = parts.find((p) => p.type === 'year')?.value || '';
+  const hour = parts.find((p) => p.type === 'hour')?.value || '00';
+  const minute = parts.find((p) => p.type === 'minute')?.value || '00';
+  return `${day}/${month}/${year} ${hour}:${minute}`;
+}
+
+/**
+ * Formatea una fecha según su tipo:
+ * - Si contiene tiempo ('T' o ' ' con hora), la trata como instante UTC y convierte a zona local.
+ * - Si es solo fecha ('YYYY-MM-DD'), la formatea sin conversión de zona.
+ */
+export function formatFecha(fechaStr?: string | null, timeZone?: string): string {
+  if (!fechaStr) return '—';
+  const trimmed = fechaStr.trim();
+  if (/[ T]\d{1,2}:\d{2}/.test(trimmed)) {
+    return formatInstanteFecha(trimmed, timeZone);
+  }
+  return formatSoloFecha(trimmed);
+}
+
+export function formatFechaHora(fechaStr?: string | null, timeZone?: string): string {
+  return formatInstanteFechaHora(fechaStr, timeZone);
 }
 
 /**

@@ -21,7 +21,8 @@ import {
 } from '@/lib/api';
 import {
   formatCLP,
-  formatFecha,
+  formatSoloFecha,
+  formatInstanteFecha,
   esPagoVencido,
   esEntregaDemorada,
   getEstadoBadge,
@@ -249,7 +250,7 @@ export default function ComprasListPage() {
                         </div>
                         <span className="text-[11px] text-zinc-400 flex items-center gap-1">
                           <Calendar className="w-3 h-3 text-zinc-500" />
-                          {formatFecha(orden.fecha_creacion)}
+                          {formatInstanteFecha(orden.fecha_creacion)}
                         </span>
                       </div>
 
@@ -292,7 +293,7 @@ export default function ComprasListPage() {
                             {orden.condicion_pago === 'credito' && (
                               <span className="ml-1 text-zinc-400">
                                 {orden.fecha_vencimiento_pago
-                                  ? `(Vence: ${formatFecha(orden.fecha_vencimiento_pago)})`
+                                  ? `(Vence: ${formatSoloFecha(orden.fecha_vencimiento_pago)})`
                                   : '(Vencimiento sin cargar)'}
                               </span>
                             )}
@@ -302,7 +303,7 @@ export default function ComprasListPage() {
                             <span className="hidden sm:inline">
                               Entrega est.:{' '}
                               <strong className="text-zinc-200 font-medium">
-                                {formatFecha(orden.fecha_entrega_estimada)}
+                                {formatSoloFecha(orden.fecha_entrega_estimada)}
                               </strong>
                             </span>
                           )}

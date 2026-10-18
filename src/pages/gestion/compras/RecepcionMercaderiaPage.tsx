@@ -34,7 +34,7 @@ import {
   type FilaLoteRecepcion,
   type CalculoDiferenciasRecepcion,
 } from '@/lib/recepciones';
-import { formatFecha, getHoyString } from '@/lib/compras';
+import { formatSoloFecha, getHoyString } from '@/lib/compras';
 import type { OrdenCompraDetalle, ProductoAdminItem } from '@/types';
 
 export default function RecepcionMercaderiaPage() {
@@ -631,7 +631,7 @@ export default function RecepcionMercaderiaPage() {
             <div className="text-left sm:text-right text-xs space-y-0.5">
               <span className="text-zinc-400 block text-[11px]">Entrega Estimada</span>
               <span className="font-semibold text-zinc-200">
-                {orden.fecha_entrega_estimada ? formatFecha(orden.fecha_entrega_estimada) : 'Sin fecha'}
+                {orden.fecha_entrega_estimada ? formatSoloFecha(orden.fecha_entrega_estimada) : 'Sin fecha'}
               </span>
             </div>
           </div>
@@ -1011,7 +1011,7 @@ export default function RecepcionMercaderiaPage() {
                             <span className="font-mono bg-zinc-800/80 px-1.5 py-0.5 rounded text-zinc-300">
                               Lote: {f.numeroLote}
                             </span>
-                            <span>Vence: {formatFecha(f.fechaVencimiento)}</span>
+                            <span>Vence: {formatSoloFecha(f.fechaVencimiento)}</span>
                           </div>
                         </div>
                         <div className="text-right">
