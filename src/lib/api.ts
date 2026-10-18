@@ -753,7 +753,7 @@ export async function desasociarProveedorDeProducto(
 /** Ítem de stock devuelto por GET /api/v1/stock. */
 export interface StockDepositoItem {
   id: number;
-  producto: { id: number; nombre: string };
+  producto: { id: number; nombre: string; codigoBarras?: string | null };
   numeroLote: string;
   fechaVencimiento: string;
   cantidadActual: number;

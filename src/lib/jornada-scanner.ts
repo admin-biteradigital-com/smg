@@ -101,3 +101,98 @@ export function procesarEscaneoVenta<T extends ScanVentaItem>(
     mensaje: encontrado ? null : 'Este producto no está cargado en el vehículo',
   };
 }
+
+export interface ScanCargaItem {
+  id: number;
+  producto?: {
+    id?: number;
+    nombre?: string;
+    codigoBarras?: string | null;
+  } | null;
+  numeroLote?: string;
+  fechaVencimiento?: string | null;
+  cantidadActual?: number;
+}
+
+export interface ScanCargaResult<T extends ScanCargaItem> {
+  codigoLimpio: string;
+  encontrado: boolean;
+  coincidencias: T[];
+  loteSeleccionado: T | null;
+  mensaje: string | null;
+}
+
+/**
+ * Función pura que procesa el resultado de un escaneo en EscenaCargarVehiculo.
+ * - Limpia el código escaneado.
+ * - Busca coincidencias exactas por código de barras (no por inclusión ni prefijo).
+ * - Considera únicamente lotes con stock disponible (cantidadActual > 0).
+ * - Un solo lote: queda seleccionado (loteSeleccionado = lote), sin mensaje.
+ * - Varios lotes: ordenados por fecha de vencimiento ascendente (FEFO), sin preselección (loteSeleccionado = null),
+ *   con aviso: "Elegí el lote (ordenados por vencimiento)".
+ * - Ninguno: no encontrado, loteSeleccionado = null, mensaje: "No hay stock en depósito para este producto".
+ */
+export function procesarEscaneoCarga<T extends ScanCargaItem>(
+  codigo: string,
+  stock: T[]
+): ScanCargaResult<T> {
+  const codigoLimpio = codigo.trim();
+  if (!codigoLimpio) {
+    return {
+      codigoLimpio: '',
+      encontrado: false,
+      coincidencias: [],
+      loteSeleccionado: null,
+      mensaje: null,
+    };
+  }
+
+  const q = codigoLimpio.toLowerCase();
+
+  // Coincidencia exacta de código de barras (no por inclusión ni prefijo)
+  // Filtrado a lotes con stock disponible
+  const coincidencias = stock
+    .filter((item) => {
+      const cb = (item.producto?.codigoBarras ?? '').trim().toLowerCase();
+      if (!cb) return false;
+      const tieneStock = item.cantidadActual === undefined ? true : item.cantidadActual > 0;
+      return cb === q && tieneStock;
+    })
+    .sort((a, b) => {
+      const fA = a.fechaVencimiento || '';
+      const fB = b.fechaVencimiento || '';
+      if (!fA && !fB) return 0;
+      if (!fA) return 1;
+      if (!fB) return -1;
+      return fA.localeCompare(fB);
+    });
+
+  if (coincidencias.length === 1) {
+    return {
+      codigoLimpio,
+      encontrado: true,
+      coincidencias,
+      loteSeleccionado: coincidencias[0],
+      mensaje: null,
+    };
+  }
+
+  if (coincidencias.length > 1) {
+    return {
+      codigoLimpio,
+      encontrado: true,
+      coincidencias,
+      loteSeleccionado: null,
+      mensaje: 'Elegí el lote (ordenados por vencimiento)',
+    };
+  }
+
+  return {
+    codigoLimpio,
+    encontrado: false,
+    coincidencias: [],
+    loteSeleccionado: null,
+    mensaje: 'No hay stock en depósito para este producto',
+  };
+}
+

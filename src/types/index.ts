@@ -304,7 +304,7 @@ export interface StockDepositoItem {
   unidadBase: string;
   diasParaVencer?: number;
   alertaVencimiento?: boolean;
-  producto?: { id: number; nombre: string };
+  producto?: { id: number; nombre: string; codigoBarras?: string | null };
   updatedAt?: string;
 }
 

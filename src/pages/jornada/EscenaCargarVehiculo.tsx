@@ -8,22 +8,18 @@ import {
   Loader2,
   Box,
   ChevronRight,
+  Camera,
+  X,
 } from 'lucide-react';
 import { api, cargarStockVehiculo } from '@/lib/api';
+import type { StockDepositoItem } from '@/lib/api';
 import { useJornada } from '@/contexts/JornadaContext';
 import JornadaLayout from '@/components/layout/JornadaLayout';
+import BarcodeScannerModal from '@/components/gestion/BarcodeScannerModal';
+import { useBarcodeScannerSupport, procesarEscaneoCarga } from '@/lib/jornada-scanner';
 import type { CargaStockItemPayload } from '@/types';
 
-// ─── Tipo local para el stock del depósito ────────────────────────────────────
-
-interface DepositoStockItem {
-  id: number;
-  producto: { id: number; nombre: string };
-  numeroLote: string;
-  fechaVencimiento: string;
-  cantidadActual: number;
-  unidadBase: string;
-}
+type DepositoStockItem = StockDepositoItem;
 
 interface ItemEnCarga {
   idProducto: number;
@@ -53,6 +49,41 @@ export default function EscenaCargarVehiculoPage() {
   // Selector temporal para añadir fila
   const [selectedStockId, setSelectedStockId] = useState<number | ''>('');
   const [inputCantidad, setInputCantidad] = useState<number | ''>('');
+
+  // Escáner de código de barras y filtro de lotes
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [scanMessage, setScanMessage] = useState<string | null>(null);
+  const [lotesFiltrados, setLotesFiltrados] = useState<StockDepositoItem[] | null>(null);
+  const hasScannerSupport = useBarcodeScannerSupport();
+
+  const handleScan = (codigo: string) => {
+    const result = procesarEscaneoCarga(codigo, stockDeposito);
+    if (!result.codigoLimpio) return;
+
+    if (result.encontrado) {
+      if (result.coincidencias.length === 1 && result.loteSeleccionado) {
+        setLotesFiltrados(null);
+        setSelectedStockId(result.loteSeleccionado.id);
+        setScanMessage(null);
+      } else {
+        setLotesFiltrados(result.coincidencias);
+        setSelectedStockId('');
+        setScanMessage(result.mensaje);
+      }
+    } else {
+      setScanMessage(result.mensaje);
+    }
+  };
+
+  const handleLimpiarFiltro = () => {
+    setLotesFiltrados(null);
+    if (scanMessage === 'Elegí el lote (ordenados por vencimiento)') {
+      setScanMessage(null);
+    }
+    if (selectedStockId === '' && stockDeposito.length > 0) {
+      setSelectedStockId(stockDeposito[0].id);
+    }
+  };
 
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -214,17 +245,77 @@ export default function EscenaCargarVehiculoPage() {
                   </p>
                 ) : (
                   <div className="space-y-3">
-                    <select
-                      value={selectedStockId}
-                      onChange={(e) => setSelectedStockId(Number(e.target.value))}
-                      className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-emerald-500 transition-colors"
-                    >
-                      {stockDeposito.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.producto.nombre} (Lote: {s.numeroLote} • Disp: {s.cantidadActual} {s.unidadBase})
-                        </option>
-                      ))}
-                    </select>
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 min-w-0">
+                        <select
+                          value={selectedStockId}
+                          onChange={(e) => {
+                            setSelectedStockId(e.target.value ? Number(e.target.value) : '');
+                            if (scanMessage === 'Elegí el lote (ordenados por vencimiento)') {
+                              setScanMessage(null);
+                            }
+                          }}
+                          className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-emerald-500 transition-colors"
+                        >
+                          {selectedStockId === '' && (
+                            <option value="" disabled>
+                              -- Elegí un lote --
+                            </option>
+                          )}
+                          {(lotesFiltrados ?? stockDeposito).map((s) => (
+                            <option key={s.id} value={s.id}>
+                              {s.producto.nombre} (Lote: {s.numeroLote} • Disp: {s.cantidadActual} {s.unidadBase})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {hasScannerSupport && (
+                        <button
+                          type="button"
+                          onClick={() => setScannerOpen(true)}
+                          className="px-3.5 py-2 bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 hover:border-emerald-500/40 text-emerald-400 rounded-xl text-xs font-bold transition-all active:scale-95 flex items-center gap-1.5 shrink-0 shadow-sm"
+                          title="Escanear código de barras con la cámara"
+                        >
+                          <Camera className="w-4 h-4 text-emerald-400" />
+                          <span className="hidden sm:inline">Escanear</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Quitar filtro y volver a la lista completa */}
+                    {lotesFiltrados !== null && (
+                      <div className="flex items-center justify-between gap-2 px-3 py-1.5 bg-zinc-900/80 border border-zinc-800 rounded-xl text-xs text-zinc-300">
+                        <span className="truncate">
+                          Filtrado por producto escaneado ({lotesFiltrados.length} lotes)
+                        </span>
+                        <button
+                          type="button"
+                          onClick={handleLimpiarFiltro}
+                          className="text-emerald-400 hover:text-emerald-300 font-semibold underline shrink-0 transition-colors"
+                        >
+                          Quitar filtro
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Mensaje no bloqueante de escaneo */}
+                    {scanMessage && (
+                      <div className="flex items-center justify-between gap-2 p-2.5 bg-amber-500/10 border border-amber-500/30 rounded-xl text-xs text-amber-400">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <AlertCircle className="w-4 h-4 shrink-0" />
+                          <span>{scanMessage}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setScanMessage(null)}
+                          className="text-amber-400/80 hover:text-amber-300 p-0.5 shrink-0"
+                          title="Cerrar aviso"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
 
                     <div className="flex items-center gap-2">
                       <input
@@ -350,6 +441,15 @@ export default function EscenaCargarVehiculoPage() {
             </button>
           </div>
         </form>
+
+        {/* Modal de escaneo de código de barras */}
+        <BarcodeScannerModal
+          isOpen={scannerOpen}
+          onClose={() => setScannerOpen(false)}
+          onScan={handleScan}
+          title="Escanear Producto"
+          subtitle="Apunta la cámara al código de barras"
+        />
       </div>
     </JornadaLayout>
   );

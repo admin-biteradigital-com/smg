@@ -472,7 +472,7 @@ export interface BackendRuta {
 
 export interface BackendStockDepositoItem {
   id: number;
-  producto?: { id: number; nombre: string };
+  producto?: { id: number; nombre: string; codigoBarras?: string | null };
   idProducto?: number;
   nombreProducto?: string;
   numeroLote: string;
