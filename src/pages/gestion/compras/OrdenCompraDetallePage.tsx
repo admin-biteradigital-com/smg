@@ -88,6 +88,9 @@ export default function OrdenCompraDetallePage() {
   const [guardandoVencimiento, setGuardandoVencimiento] = useState(false);
   const [errorVencimientoMsg, setErrorVencimientoMsg] = useState<string | null>(null);
 
+  // Líneas con error (inconsistentes con el proveedor)
+  const [lineasConError, setLineasConError] = useState<number[]>([]);
+
   // Carga inicial y recarga del detalle
   const loadData = useCallback(async () => {
     if (isNaN(ordenId) || ordenId <= 0) {
@@ -136,6 +139,18 @@ export default function OrdenCompraDetallePage() {
         await loadData();
         return;
       }
+      if (err.code === 'PRODUCTO_NO_ASOCIADO_A_PROVEEDOR') {
+        const details = err.details as { field?: string; id_producto?: number; message?: string } | undefined;
+        if (details?.id_producto) {
+          setLineasConError([details.id_producto]);
+        }
+        setErrorMsg(details?.message || err.message || 'La orden contiene productos no asociados a su proveedor.');
+        return;
+      }
+      if (err.status === 400) {
+        setErrorMsg(err.message || fallbackMsg);
+        return;
+      }
       if (err.code === 'INVALID_INPUT' && err.details) {
         setErrorMsg(`Datos inválidos: ${JSON.stringify(err.details)}`);
         return;
@@ -162,8 +177,10 @@ export default function OrdenCompraDetallePage() {
       await confirmarOrdenCompra(orden.id);
       setModalConfirmarOpen(false);
       setExitoMsg('Orden de compra confirmada exitosamente.');
+      setLineasConError([]);
       await loadData();
     } catch (err) {
+      setModalConfirmarOpen(false);
       console.error('[OrdenCompraDetallePage] Error al confirmar:', err);
       await handleApiError(err, 'No se pudo confirmar la orden.');
     } finally {
@@ -639,21 +656,33 @@ export default function OrdenCompraDetallePage() {
             {(!orden.lineas || orden.lineas.length === 0) ? (
               <p className="text-xs text-zinc-500 py-4 text-center">No hay líneas en esta orden.</p>
             ) : (
-              orden.lineas.map((linea, index) => (
-                <div
-                  key={linea.id || index}
-                  className="bg-zinc-950/60 border border-zinc-800/80 rounded-2xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
-                >
-                  <div className="space-y-0.5">
-                    <p className="font-bold text-zinc-200">
-                      {linea.producto_nombre || `Producto #${linea.id_producto}`}
-                    </p>
-                    {linea.producto_codigo && (
-                      <p className="text-[11px] text-zinc-400 font-mono">
-                        SKU: {linea.producto_codigo}
+              orden.lineas.map((linea, index) => {
+                const tieneError = lineasConError.includes(linea.id_producto);
+                return (
+                  <div
+                    key={linea.id || index}
+                    className={`bg-zinc-950/60 border rounded-2xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs transition-colors ${
+                      tieneError
+                        ? 'border-rose-500/60 bg-rose-500/5 ring-1 ring-rose-500/30'
+                        : 'border-zinc-800/80'
+                    }`}
+                  >
+                    <div className="space-y-0.5">
+                      <p className="font-bold text-zinc-200">
+                        {linea.producto_nombre || `Producto #${linea.id_producto}`}
                       </p>
-                    )}
-                  </div>
+                      {linea.producto_codigo && (
+                        <p className="text-[11px] text-zinc-400 font-mono">
+                          SKU: {linea.producto_codigo}
+                        </p>
+                      )}
+                      {tieneError && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20 mt-1">
+                          <AlertCircle className="w-3 h-3" />
+                          <span>No asociado al proveedor</span>
+                        </span>
+                      )}
+                    </div>
 
                   <div className="flex items-center justify-between sm:justify-end gap-6 text-right">
                     <div className="text-left sm:text-right">
@@ -683,7 +712,8 @@ export default function OrdenCompraDetallePage() {
                     </div>
                   </div>
                 </div>
-              ))
+              );
+            })
             )}
           </div>
         </section>

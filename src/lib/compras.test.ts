@@ -13,6 +13,8 @@ import {
   resolverSeleccionProveedor,
   filtrarYOrdenarProductosSelector,
   obtenerEtiquetaCatalogo,
+  validarCambioProveedor,
+  verificarConsistenciaLineasProveedor,
 } from './compras';
 import type { ProductoAdminItem } from '@/types';
 
@@ -432,6 +434,85 @@ describe('ADR-020: Módulo Compras — Lógica Pura', () => {
       expect(filtrarYOrdenarProductosSelector([])).toEqual([]);
       expect(filtrarYOrdenarProductosSelector(null as unknown as ProductoAdminItem[])).toEqual([]);
       expect(obtenerEtiquetaCatalogo(undefined, -5)).toBe('Todos los productos (0)');
+    });
+  });
+
+  describe('validarCambioProveedor', () => {
+    it('sin líneas cargadas: permite cambiar a cualquier proveedor sin confirmación', () => {
+      expect(validarCambioProveedor('', 1, 0)).toEqual({
+        permitido: true,
+        requiereConfirmacion: false,
+      });
+      expect(validarCambioProveedor(1, 2, 0)).toEqual({
+        permitido: true,
+        requiereConfirmacion: false,
+      });
+    });
+
+    it('sin líneas cargadas: permite vaciar el proveedor sin confirmación', () => {
+      expect(validarCambioProveedor(1, '', 0)).toEqual({
+        permitido: true,
+        requiereConfirmacion: false,
+      });
+    });
+
+    it('mismo proveedor: no requiere confirmación ni cambio', () => {
+      expect(validarCambioProveedor(1, 1, 3)).toEqual({
+        permitido: true,
+        requiereConfirmacion: false,
+        motivo: 'sin_cambio',
+      });
+      expect(validarCambioProveedor('', '', 0)).toEqual({
+        permitido: true,
+        requiereConfirmacion: false,
+        motivo: 'sin_cambio',
+      });
+    });
+
+    it('con líneas cargadas: NO permite elegir la opción vacía (el proveedor no puede quedar vacío)', () => {
+      const res = validarCambioProveedor(1, '', 2);
+      expect(res.permitido).toBe(false);
+      expect(res.requiereConfirmacion).toBe(false);
+      expect(res.motivo).toBe('no_permitido_con_lineas');
+      expect(res.mensaje).toBe('No puedes dejar la orden sin proveedor si ya tiene líneas cargadas.');
+    });
+
+    it('con líneas cargadas: cambiar a otro proveedor válido requiere confirmación', () => {
+      const res = validarCambioProveedor(1, 2, 1);
+      expect(res.permitido).toBe(true);
+      expect(res.requiereConfirmacion).toBe(true);
+    });
+  });
+
+  describe('verificarConsistenciaLineasProveedor', () => {
+    it('todas las líneas pertenecen al proveedor: consistente es true', () => {
+      const lineas = [
+        { id_producto: 101, nombre: 'Producto A' },
+        { id_producto: 102, nombre: 'Producto B' },
+      ];
+      const validos = new Set([101, 102, 103]);
+      const res = verificarConsistenciaLineasProveedor(lineas, validos);
+      expect(res.consistente).toBe(true);
+      expect(res.lineasInconsistentes).toEqual([]);
+    });
+
+    it('detecta productos que no pertenecen al proveedor y los lista', () => {
+      const lineas = [
+        { id_producto: 101, nombre: 'Producto A' },
+        { id_producto: 999, nombre: 'Producto Infiltrado' },
+      ];
+      const validos = [101, 102];
+      const res = verificarConsistenciaLineasProveedor(lineas, validos);
+      expect(res.consistente).toBe(false);
+      expect(res.lineasInconsistentes).toHaveLength(1);
+      expect(res.lineasInconsistentes[0].id_producto).toBe(999);
+      expect(res.lineasInconsistentes[0].nombre).toBe('Producto Infiltrado');
+    });
+
+    it('sin líneas: siempre es consistente', () => {
+      const res = verificarConsistenciaLineasProveedor([], new Set([1, 2]));
+      expect(res.consistente).toBe(true);
+      expect(res.lineasInconsistentes).toEqual([]);
     });
   });
 });

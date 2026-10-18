@@ -220,6 +220,83 @@ export function resolverSeleccionProveedor(
   };
 }
 
+export interface ValidacionCambioProveedorResult {
+  permitido: boolean;
+  requiereConfirmacion: boolean;
+  motivo?: 'no_permitido_con_lineas' | 'sin_cambio';
+  mensaje?: string;
+}
+
+/**
+ * Decide si se permite cambiar el proveedor de una orden de compra o si requiere confirmación.
+ * - Si no hay líneas cargadas, se permite cambiar a cualquier proveedor o vaciarlo libremente.
+ * - Con líneas cargadas, NO está permitido elegir la opción vacía (el proveedor no puede quedar vacío).
+ * - Con líneas cargadas, cambiar a otro proveedor válido requiere confirmación (para descartar productos no asociados).
+ * - Si no cambia el proveedor, se permite sin confirmación.
+ */
+export function validarCambioProveedor(
+  idProveedorActual: number | '' | null | undefined,
+  nuevoIdProveedor: number | '' | null | undefined,
+  cantidadLineas: number
+): ValidacionCambioProveedorResult {
+  const actual = idProveedorActual || '';
+  const nuevo = nuevoIdProveedor || '';
+
+  if (actual === nuevo) {
+    return { permitido: true, requiereConfirmacion: false, motivo: 'sin_cambio' };
+  }
+
+  if (cantidadLineas <= 0) {
+    return { permitido: true, requiereConfirmacion: false };
+  }
+
+  // Con líneas cargadas, no se permite opción vacía
+  if (nuevo === '') {
+    return {
+      permitido: false,
+      requiereConfirmacion: false,
+      motivo: 'no_permitido_con_lineas',
+      mensaje: 'No puedes dejar la orden sin proveedor si ya tiene líneas cargadas.',
+    };
+  }
+
+  // Cambiar a otro proveedor con líneas cargadas requiere confirmación
+  return {
+    permitido: true,
+    requiereConfirmacion: true,
+  };
+}
+
+export interface ConsistenciaLineasProveedorResult {
+  consistente: boolean;
+  lineasInconsistentes: Array<{
+    id_producto: number;
+    nombre?: string;
+  }>;
+}
+
+/**
+ * Verifica que todos los productos de las líneas pertenezcan al conjunto de productos asociados al proveedor.
+ */
+export function verificarConsistenciaLineasProveedor(
+  lineas: Array<{ id_producto: number; nombre?: string }>,
+  idsValidosDelProveedor: Set<number> | number[]
+): ConsistenciaLineasProveedorResult {
+  const setValidos =
+    idsValidosDelProveedor instanceof Set
+      ? idsValidosDelProveedor
+      : new Set(idsValidosDelProveedor);
+
+  const lineasInconsistentes = (lineas || []).filter(
+    (l) => !setValidos.has(l.id_producto)
+  );
+
+  return {
+    consistente: lineasInconsistentes.length === 0,
+    lineasInconsistentes,
+  };
+}
+
 // ─── Selector de Productos en Órdenes de Compra ──────────────────────────────
 
 /**

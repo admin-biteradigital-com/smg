@@ -36,6 +36,8 @@ import {
   resolverSeleccionProveedor,
   filtrarYOrdenarProductosSelector,
   obtenerEtiquetaCatalogo,
+  validarCambioProveedor,
+  verificarConsistenciaLineasProveedor,
 } from '@/lib/compras';
 import type {
   ProveedorAdminItem,
@@ -80,6 +82,7 @@ export default function OrdenCompraFormPage() {
 
   // Formulario Líneas
   const [lineas, setLineas] = useState<LineaFormItem[]>([]);
+  const [lineasConError, setLineasConError] = useState<number[]>([]);
 
   // Búsqueda y selector de productos
   const [cargandoProductos, setCargandoProductos] = useState<boolean>(false);
@@ -244,12 +247,21 @@ export default function OrdenCompraFormPage() {
   // Manejo de cambio de proveedor
   const handleProveedorChange = (nuevoIdStr: string) => {
     const nuevoId = nuevoIdStr ? Number(nuevoIdStr) : '';
+    const decision = validarCambioProveedor(idProveedor, nuevoId, lineas.length);
 
-    if (lineas.length > 0 && nuevoId !== idProveedor && typeof nuevoId === 'number') {
+    if (!decision.permitido) {
+      if (decision.mensaje) {
+        setErrorGlobal(decision.mensaje);
+      }
+      return;
+    }
+
+    if (decision.requiereConfirmacion && typeof nuevoId === 'number') {
       // Guardar el intento y abrir modal de advertencia
       setModalCambioProveedor({ nuevoProveedorId: nuevoId });
     } else {
       setIdProveedor(nuevoId);
+      setErrorGlobal(null);
     }
   };
 
@@ -268,6 +280,8 @@ export default function OrdenCompraFormPage() {
       setLineas(lineasFiltradas);
       setProductosDisponibles(nuevosProds);
       setIdProveedor(nuevoId);
+      setLineasConError([]);
+      setErrorGlobal(null);
     } catch (err) {
       console.error('[OrdenCompraFormPage] Error al cambiar proveedor:', err);
     } finally {
@@ -412,6 +426,10 @@ export default function OrdenCompraFormPage() {
 
   // Quitar línea
   const quitarLinea = (index: number) => {
+    const lineaQuitada = lineas[index];
+    if (lineaQuitada) {
+      setLineasConError((prev) => prev.filter((id) => id !== lineaQuitada.id_producto));
+    }
     setLineas((prev) => prev.filter((_, i) => i !== index));
   };
 
@@ -475,6 +493,25 @@ export default function OrdenCompraFormPage() {
 
     setGuardando(true);
     try {
+      // Verificación de consistencia de líneas con el proveedor seleccionado
+      const resProds = await getProductosAdmin({ id_proveedor: idProveedor });
+      const idsValidos = new Set((resProds?.data || []).map((p) => p.id));
+      const consistencia = verificarConsistenciaLineasProveedor(lineas, idsValidos);
+
+      if (!consistencia.consistente) {
+        const idsInconsistentes = consistencia.lineasInconsistentes.map((l) => l.id_producto);
+        setLineasConError(idsInconsistentes);
+        const nombres = consistencia.lineasInconsistentes
+          .map((l) => `"${l.nombre || `Producto #${l.id_producto}`}"`)
+          .join(', ');
+        setErrorGlobal(
+          `Las siguientes líneas no pertenecen al proveedor seleccionado: ${nombres}. Elimínalas antes de guardar.`
+        );
+        setGuardando(false);
+        return;
+      }
+      setLineasConError([]);
+
       const lineasPayload = lineas.map((l) => ({
         id_producto: l.id_producto,
         cantidad: l.cantidad,
@@ -513,8 +550,16 @@ export default function OrdenCompraFormPage() {
           setErrorGlobal('La orden cambió de estado y ya no se puede editar.');
           return;
         }
-        if (err.code === 'INVALID_INPUT' && err.details) {
-          setErrorGlobal(`Error en los datos ingresados: ${JSON.stringify(err.details)}`);
+        if (err.code === 'PRODUCTO_NO_ASOCIADO_A_PROVEEDOR') {
+          const details = err.details as { field?: string; id_producto?: number; message?: string } | undefined;
+          if (details?.id_producto) {
+            setLineasConError([details.id_producto]);
+          }
+          setErrorGlobal(details?.message || err.message || 'El producto no está asociado al proveedor.');
+          return;
+        }
+        if (err.status === 400) {
+          setErrorGlobal(err.message || 'Error en los datos ingresados al guardar la orden.');
           return;
         }
         setErrorGlobal(err.message || 'Error al guardar la orden.');
@@ -608,7 +653,9 @@ export default function OrdenCompraFormPage() {
                   onChange={(e) => handleProveedorChange(e.target.value)}
                   className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-rose-500"
                 >
-                  <option value="">Selecciona un proveedor activo...</option>
+                  <option value="" disabled={lineas.length > 0}>
+                    Selecciona un proveedor activo...
+                  </option>
                   {proveedores.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.nombre} {p.rut ? `(${p.rut})` : ''}
@@ -821,10 +868,16 @@ export default function OrdenCompraFormPage() {
                     nombreUnidadCompra: linea.unidad_compra,
                   });
 
+                  const tieneError = lineasConError.includes(linea.id_producto);
+
                   return (
                     <div
                       key={linea.id_producto}
-                      className="bg-zinc-950/70 border border-zinc-800 rounded-2xl p-3.5 space-y-3"
+                      className={`bg-zinc-950/70 border rounded-2xl p-3.5 space-y-3 transition-colors ${
+                        tieneError
+                          ? 'border-rose-500/60 bg-rose-500/5 ring-1 ring-rose-500/30'
+                          : 'border-zinc-800'
+                      }`}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
@@ -833,6 +886,12 @@ export default function OrdenCompraFormPage() {
                             <p className="text-[10px] text-zinc-400 font-mono">
                               Cod: {linea.codigo}
                             </p>
+                          )}
+                          {tieneError && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20 mt-1">
+                              <AlertCircle className="w-3 h-3" />
+                              <span>No asociado al proveedor</span>
+                            </span>
                           )}
                         </div>
 
