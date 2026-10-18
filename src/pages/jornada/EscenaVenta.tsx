@@ -12,9 +12,12 @@ import {
   User,
   FileText,
   Boxes,
+  Camera,
 } from 'lucide-react';
 import { useJornada } from '@/contexts/JornadaContext';
 import JornadaLayout from '@/components/layout/JornadaLayout';
+import BarcodeScannerModal from '@/components/gestion/BarcodeScannerModal';
+import { useBarcodeScannerSupport, procesarEscaneoVenta } from '@/lib/jornada-scanner';
 import { api, ApiRequestError, NetworkError } from '@/lib/api';
 import { db, enqueueOperation } from '@/lib/db';
 import type { Cliente, Sucursal } from '@/types';
@@ -73,6 +76,18 @@ export default function EscenaVentaPage() {
   const [carrito, setCarrito] = useState<LineaCarrito[]>([]);
   const [busqueda, setBusqueda] = useState('');
   const [notas, setNotas] = useState('');
+
+  // Escáner de código de barras
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [scanMessage, setScanMessage] = useState<string | null>(null);
+  const hasScannerSupport = useBarcodeScannerSupport();
+
+  const handleScan = (codigo: string) => {
+    const result = procesarEscaneoVenta(codigo, carrito);
+    if (!result.codigoLimpio) return;
+    setBusqueda(result.codigoLimpio);
+    setScanMessage(result.mensaje);
+  };
 
   // Estados de envío
   const [enviando, setEnviando] = useState(false);
@@ -294,25 +309,64 @@ export default function EscenaVentaPage() {
 
         {/* Buscador de productos en el vehículo */}
         <div className="sticky top-[57px] z-30 bg-zinc-950/95 backdrop-blur-md border-b border-zinc-800/60 px-4 py-3">
-          <div className="relative">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none" />
-            <input
-              type="search"
-              inputMode="search"
-              placeholder="Buscar en stock del vehículo..."
-              value={busqueda}
-              onChange={(e) => setBusqueda(e.target.value)}
-              className="w-full pl-10 pr-9 py-2.5 bg-zinc-900 border border-zinc-800 focus:border-brand-500 rounded-2xl text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-brand-500/50 transition-all"
-            />
-            {busqueda && (
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none" />
+              <input
+                type="search"
+                inputMode="search"
+                placeholder="Buscar en stock del vehículo..."
+                value={busqueda}
+                onChange={(e) => {
+                  setBusqueda(e.target.value);
+                  if (scanMessage) setScanMessage(null);
+                }}
+                className="w-full pl-10 pr-9 py-2.5 bg-zinc-900 border border-zinc-800 focus:border-brand-500 rounded-2xl text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-brand-500/50 transition-all"
+              />
+              {busqueda && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBusqueda('');
+                    if (scanMessage) setScanMessage(null);
+                  }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 p-1"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+
+            {hasScannerSupport && (
               <button
-                onClick={() => setBusqueda('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 p-1"
+                type="button"
+                onClick={() => setScannerOpen(true)}
+                className="px-3.5 py-2.5 bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 hover:border-brand-500/40 text-brand-400 rounded-2xl text-xs font-bold transition-all active:scale-95 flex items-center gap-1.5 shrink-0 shadow-sm"
+                title="Escanear código de barras con la cámara"
               >
-                <X className="w-4 h-4" />
+                <Camera className="w-4 h-4 text-brand-400" />
+                <span className="hidden sm:inline">Escanear</span>
               </button>
             )}
           </div>
+
+          {/* Mensaje no bloqueante de escaneo */}
+          {scanMessage && (
+            <div className="mt-2.5 flex items-center justify-between gap-2 p-2.5 bg-amber-500/10 border border-amber-500/30 rounded-xl text-xs text-amber-400">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{scanMessage}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setScanMessage(null)}
+                className="text-amber-400/80 hover:text-amber-300 p-0.5"
+                title="Cerrar aviso"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Lista de productos del vehículo */}
@@ -522,6 +576,15 @@ export default function EscenaVentaPage() {
             </div>
           </div>
         </div>
+
+        {/* Modal de escaneo de código de barras */}
+        <BarcodeScannerModal
+          isOpen={scannerOpen}
+          onClose={() => setScannerOpen(false)}
+          onScan={handleScan}
+          title="Escanear Producto"
+          subtitle="Apunta la cámara al código de barras"
+        />
       </div>
     </JornadaLayout>
   );
