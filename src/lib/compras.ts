@@ -539,3 +539,73 @@ export function getEstadoPagoBadge(estadoPago: OrdenCompraEstadoPago | string): 
       };
   }
 }
+
+// ─── Avisos de Pago Pendiente ─────────────────────────────────────────────────
+
+export type TipoAvisoPago =
+  | 'contado'
+  | 'credito_sin_vencimiento'
+  | 'futuro'
+  | 'hoy'
+  | 'pasado';
+
+/**
+ * Decide el tipo de aviso de pago pendiente para una orden de compra:
+ * - null si la orden no está recibida o si ya está pagada.
+ * - 'contado' si la condición es contado con pago pendiente.
+ * - 'credito_sin_vencimiento' si es crédito recibida sin fecha de vencimiento cargada.
+ * - 'futuro' si el vencimiento es posterior a hoy.
+ * - 'hoy' si el vencimiento es hoy.
+ * - 'pasado' si el vencimiento ya pasó (vencido).
+ */
+export function determinarTipoAvisoPago(
+  orden?: {
+    estado?: string | null;
+    condicion_pago?: string | null;
+    estado_pago?: string | null;
+    fecha_vencimiento_pago?: string | null;
+  } | null,
+  hoy: string = getHoyString()
+): TipoAvisoPago | null {
+  if (!orden || orden.estado !== 'recibida') return null;
+  if (orden.estado_pago === 'pagado') return null;
+
+  if (orden.condicion_pago === 'credito') {
+    const vencimiento = orden.fecha_vencimiento_pago
+      ? orden.fecha_vencimiento_pago.split('T')[0].trim()
+      : '';
+
+    if (!vencimiento) {
+      return 'credito_sin_vencimiento';
+    }
+    if (vencimiento > hoy) {
+      return 'futuro';
+    }
+    if (vencimiento === hoy) {
+      return 'hoy';
+    }
+    return 'pasado';
+  }
+
+  return 'contado';
+}
+
+/**
+ * Genera el texto del aviso para órdenes a crédito según su estado de vencimiento.
+ */
+export function construirTextoAvisoCredito(
+  tipo: 'credito_sin_vencimiento' | 'futuro' | 'hoy' | 'pasado',
+  fechaVencimiento?: string | null,
+  saldoTexto?: string
+): string {
+  if (tipo === 'credito_sin_vencimiento') {
+    return 'Orden recibida a crédito con pago pendiente. Todavía no cargaste el vencimiento: cargalo cuando llegue la factura del proveedor.';
+  }
+  const fechaStr = formatSoloFecha(fechaVencimiento);
+  const saldoPart = saldoTexto !== undefined && saldoTexto !== null && saldoTexto !== '' ? ` (saldo ${saldoTexto})` : '';
+  if (tipo === 'pasado') {
+    return `Pago a crédito vencido el ${fechaStr}${saldoPart}.`;
+  }
+  return `Orden recibida a crédito con pago pendiente. Vence el ${fechaStr}${saldoPart}.`;
+}
+

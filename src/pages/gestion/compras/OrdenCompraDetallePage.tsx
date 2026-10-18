@@ -38,6 +38,8 @@ import {
   getEstadoBadge,
   getEstadoPagoBadge,
   getHoyString,
+  determinarTipoAvisoPago,
+  construirTextoAvisoCredito,
 } from '@/lib/compras';
 import type {
   OrdenCompraDetalle,
@@ -313,6 +315,7 @@ export default function OrdenCompraDetallePage() {
   const badgePago = getEstadoPagoBadge(orden.estado_pago);
   const pagoVencido = esPagoVencido(orden);
   const entregaDemorada = esEntregaDemorada(orden);
+  const tipoAvisoPago = determinarTipoAvisoPago(orden);
 
   const esBorrador = orden.estado === 'borrador';
   const esConfirmada = orden.estado === 'confirmada';
@@ -404,25 +407,90 @@ export default function OrdenCompraDetallePage() {
           </div>
         )}
 
-        {/* Banner para orden recibida al contado con pago pendiente */}
-        {orden.estado === 'recibida' &&
-          orden.condicion_pago === 'contado' &&
-          orden.estado_pago === 'pendiente' && (
-            <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-300 animate-fade-in shadow-md">
-              <div className="flex items-center gap-2.5">
-                <DollarSign className="w-4 h-4 text-amber-400 shrink-0" />
-                <span>
-                  Esta orden fue <strong>recibida</strong> con condición al <strong>contado</strong> y su pago se encuentra <strong>pendiente</strong>.
-                </span>
-              </div>
+        {/* Banner para orden recibida con pago pendiente (contado o crédito) */}
+        {tipoAvisoPago === 'contado' && (
+          <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-300 animate-fade-in shadow-md">
+            <div className="flex items-center gap-2.5">
+              <DollarSign className="w-4 h-4 text-amber-400 shrink-0" />
+              <span>
+                Esta orden fue <strong>recibida</strong> con condición al <strong>contado</strong> y su pago se encuentra <strong>pendiente</strong>.
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setModalPagoOpen(true)}
+              className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-extrabold rounded-xl text-xs transition-colors shrink-0 shadow-md active:scale-95 text-center"
+            >
+              Registrar pago ahora
+            </button>
+          </div>
+        )}
+
+        {tipoAvisoPago === 'credito_sin_vencimiento' && (
+          <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-300 animate-fade-in shadow-md">
+            <div className="flex items-center gap-2.5">
+              <Clock className="w-4 h-4 text-amber-400 shrink-0" />
+              <span>
+                {construirTextoAvisoCredito(tipoAvisoPago)}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setNuevoVencimiento(orden.fecha_vencimiento_pago?.split('T')[0] || '');
+                  setErrorVencimientoMsg(null);
+                  setModalVencimientoOpen(true);
+                }}
+                className="px-3.5 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 font-bold rounded-xl text-xs transition-colors shadow-md active:scale-95 text-center"
+              >
+                Cargar vencimiento
+              </button>
               <button
                 type="button"
                 onClick={() => setModalPagoOpen(true)}
-                className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-extrabold rounded-xl text-xs transition-colors shrink-0 shadow-md active:scale-95 text-center"
+                className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-extrabold rounded-xl text-xs transition-colors shadow-md active:scale-95 text-center"
               >
-                Registrar pago ahora
+                Registrar pago
               </button>
             </div>
+          </div>
+        )}
+
+        {(tipoAvisoPago === 'futuro' || tipoAvisoPago === 'hoy') && (
+          <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-300 animate-fade-in shadow-md">
+            <div className="flex items-center gap-2.5">
+              <Clock className="w-4 h-4 text-amber-400 shrink-0" />
+              <span>
+                {construirTextoAvisoCredito(tipoAvisoPago, orden.fecha_vencimiento_pago, formatCLP(saldoPendiente))}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setModalPagoOpen(true)}
+              className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-extrabold rounded-xl text-xs transition-colors shrink-0 shadow-md active:scale-95 text-center"
+            >
+              Registrar pago
+            </button>
+          </div>
+        )}
+
+        {tipoAvisoPago === 'pasado' && (
+          <div className="p-4 bg-rose-500/15 border border-rose-500/30 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-rose-300 animate-fade-in shadow-md">
+            <div className="flex items-center gap-2.5">
+              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+              <span>
+                {construirTextoAvisoCredito(tipoAvisoPago, orden.fecha_vencimiento_pago, formatCLP(saldoPendiente))}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setModalPagoOpen(true)}
+              className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white font-extrabold rounded-xl text-xs transition-colors shrink-0 shadow-md active:scale-95 text-center"
+            >
+              Registrar pago
+            </button>
+          </div>
         )}
 
         {/* 1. Cabecera y Estados */}

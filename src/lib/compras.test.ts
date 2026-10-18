@@ -19,6 +19,8 @@ import {
   obtenerEtiquetaCatalogo,
   validarCambioProveedor,
   verificarConsistenciaLineasProveedor,
+  determinarTipoAvisoPago,
+  construirTextoAvisoCredito,
 } from './compras';
 import type { ProductoAdminItem } from '@/types';
 
@@ -551,6 +553,130 @@ describe('ADR-020: Módulo Compras — Lógica Pura', () => {
       const res = verificarConsistenciaLineasProveedor([], new Set([1, 2]));
       expect(res.consistente).toBe(true);
       expect(res.lineasInconsistentes).toEqual([]);
+    });
+  });
+
+  describe('ADR-020: Avisos de pago pendiente en órdenes recibidas (contado y crédito)', () => {
+    const hoy = '2026-10-18';
+
+    it('contado: orden recibida con pago pendiente retorna contado', () => {
+      const orden = {
+        estado: 'recibida',
+        condicion_pago: 'contado',
+        estado_pago: 'pendiente',
+      };
+      expect(determinarTipoAvisoPago(orden, hoy)).toBe('contado');
+    });
+
+    it('contado: orden recibida con pago parcial retorna contado', () => {
+      const orden = {
+        estado: 'recibida',
+        condicion_pago: 'contado',
+        estado_pago: 'parcial',
+      };
+      expect(determinarTipoAvisoPago(orden, hoy)).toBe('contado');
+    });
+
+    it('crédito sin vencimiento: orden recibida a crédito sin fecha de vencimiento', () => {
+      const orden1 = {
+        estado: 'recibida',
+        condicion_pago: 'credito',
+        estado_pago: 'pendiente',
+        fecha_vencimiento_pago: null,
+      };
+      expect(determinarTipoAvisoPago(orden1, hoy)).toBe('credito_sin_vencimiento');
+
+      const orden2 = {
+        estado: 'recibida',
+        condicion_pago: 'credito',
+        estado_pago: 'pendiente',
+        fecha_vencimiento_pago: '',
+      };
+      expect(determinarTipoAvisoPago(orden2, hoy)).toBe('credito_sin_vencimiento');
+    });
+
+    it('futuro: vencimiento posterior a hoy retorna futuro', () => {
+      const orden = {
+        estado: 'recibida',
+        condicion_pago: 'credito',
+        estado_pago: 'pendiente',
+        fecha_vencimiento_pago: '2026-10-25',
+      };
+      expect(determinarTipoAvisoPago(orden, hoy)).toBe('futuro');
+    });
+
+    it('hoy: vencimiento igual a hoy retorna hoy', () => {
+      const orden = {
+        estado: 'recibida',
+        condicion_pago: 'credito',
+        estado_pago: 'pendiente',
+        fecha_vencimiento_pago: '2026-10-18',
+      };
+      expect(determinarTipoAvisoPago(orden, hoy)).toBe('hoy');
+    });
+
+    it('pasado: vencimiento anterior a hoy retorna pasado (vencido)', () => {
+      const orden = {
+        estado: 'recibida',
+        condicion_pago: 'credito',
+        estado_pago: 'pendiente',
+        fecha_vencimiento_pago: '2026-10-10',
+      };
+      expect(determinarTipoAvisoPago(orden, hoy)).toBe('pasado');
+    });
+
+    it('pagado (sin aviso): si estado_pago es pagado no muestra aviso', () => {
+      expect(determinarTipoAvisoPago({
+        estado: 'recibida',
+        condicion_pago: 'contado',
+        estado_pago: 'pagado',
+      }, hoy)).toBeNull();
+
+      expect(determinarTipoAvisoPago({
+        estado: 'recibida',
+        condicion_pago: 'credito',
+        estado_pago: 'pagado',
+        fecha_vencimiento_pago: '2026-10-10',
+      }, hoy)).toBeNull();
+    });
+
+    it('no recibida (sin aviso): órdenes en borrador, confirmada o cancelada no muestran aviso', () => {
+      expect(determinarTipoAvisoPago({
+        estado: 'borrador',
+        condicion_pago: 'contado',
+        estado_pago: 'pendiente',
+      }, hoy)).toBeNull();
+
+      expect(determinarTipoAvisoPago({
+        estado: 'confirmada',
+        condicion_pago: 'credito',
+        estado_pago: 'pendiente',
+        fecha_vencimiento_pago: '2026-10-10',
+      }, hoy)).toBeNull();
+
+      expect(determinarTipoAvisoPago({
+        estado: 'cancelada',
+        condicion_pago: 'credito',
+        estado_pago: 'pendiente',
+      }, hoy)).toBeNull();
+    });
+
+    it('construirTextoAvisoCredito genera textos exactos según especificación', () => {
+      expect(construirTextoAvisoCredito('credito_sin_vencimiento')).toBe(
+        'Orden recibida a crédito con pago pendiente. Todavía no cargaste el vencimiento: cargalo cuando llegue la factura del proveedor.'
+      );
+
+      expect(construirTextoAvisoCredito('futuro', '2026-10-25', '$45.000')).toBe(
+        'Orden recibida a crédito con pago pendiente. Vence el 25/10/2026 (saldo $45.000).'
+      );
+
+      expect(construirTextoAvisoCredito('hoy', '2026-10-18', '$12.000')).toBe(
+        'Orden recibida a crédito con pago pendiente. Vence el 18/10/2026 (saldo $12.000).'
+      );
+
+      expect(construirTextoAvisoCredito('pasado', '2026-10-10', '$30.000')).toBe(
+        'Pago a crédito vencido el 10/10/2026 (saldo $30.000).'
+      );
     });
   });
 });
