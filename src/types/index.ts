@@ -201,6 +201,7 @@ export interface VentaCobro {
 
 export type OfflineOperationType =
   | 'CREATE_PEDIDO'
+  | 'CREATE_SALE'
   | 'UPDATE_PEDIDO'
   | 'CREATE_COBRO'
   | 'CREATE_CLIENTE'
@@ -360,6 +361,7 @@ export interface CargaStockItemPayload {
 export interface CargarStockPayload {
   items: CargaStockItemPayload[];
   observaciones?: string;
+  claveIdempotencia?: string;
 }
 
 export interface ResumenCargaStock {

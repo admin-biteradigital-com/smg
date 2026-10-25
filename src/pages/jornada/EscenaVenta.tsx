@@ -19,7 +19,7 @@ import JornadaLayout from '@/components/layout/JornadaLayout';
 import BarcodeScannerModal from '@/components/gestion/BarcodeScannerModal';
 import { useBarcodeScannerSupport, procesarEscaneoVenta } from '@/lib/jornada-scanner';
 import { api, ApiRequestError, NetworkError } from '@/lib/api';
-import { db, enqueueOperation } from '@/lib/db';
+import { db, enqueueOperation, generateUlid } from '@/lib/db';
 import type { Cliente, Sucursal } from '@/types';
 
 // ─── Tipos locales ────────────────────────────────────────────────────────────
@@ -36,7 +36,7 @@ export interface LineaCarrito {
   unidadMedida: string;
 }
 
-interface SalePayload {
+export interface SalePayload {
   id_cliente: number;
   id_sucursal: number | null;
   canal?: 'app_vendedor';
@@ -46,14 +46,36 @@ interface SalePayload {
     precio_unitario: number;
   }>;
   notas: string | null;
+  clave_idempotencia?: string;
 }
 
-interface SaleResponse {
+export interface SaleResponse {
   data: {
     id: number;
     total?: number;
+    reutilizada?: boolean;
   };
   meta?: unknown;
+}
+
+export function crearPayloadVenta(
+  clienteId: string | number,
+  sucursalId: string | number | null,
+  lineas: LineaCarrito[],
+  notas: string,
+  claveIdempotencia: string
+): SalePayload {
+  return {
+    id_cliente: Number(clienteId),
+    id_sucursal: sucursalId ? Number(sucursalId) : null,
+    lineas: lineas.map((l) => ({
+      id_producto: Number(l.idProducto),
+      cantidad: Number(l.cantidad),
+      precio_unitario: Number(l.precioUnitario),
+    })),
+    notas: notas.trim() || null,
+    clave_idempotencia: claveIdempotencia,
+  };
 }
 
 // ─── EscenaVentaPage ──────────────────────────────────────────────────────────
@@ -209,21 +231,22 @@ export default function EscenaVentaPage() {
 
   // 3. Confirmar Venta
   const handleConfirmarVenta = async () => {
-    if (lineasSeleccionadas.length === 0 || !jornada || !clienteId) return;
+    // Evitar solicitudes duplicadas o doble toque
+    if (enviando || lineasSeleccionadas.length === 0 || !jornada || !clienteId) return;
 
     setEnviando(true);
     setErrorEnvio(null);
 
-    const payload: SalePayload = {
-      id_cliente: Number(clienteId),
-      id_sucursal: sucursalId ? Number(sucursalId) : null,
-      lineas: lineasSeleccionadas.map((l) => ({
-        id_producto: Number(l.idProducto),
-        cantidad: Number(l.cantidad),
-        precio_unitario: Number(l.precioUnitario),
-      })),
-      notas: notas.trim() || null,
-    };
+    // Generar UNA clave ULID de idempotencia antes del intento
+    const claveIdempotencia = generateUlid();
+
+    const payload = crearPayloadVenta(
+      clienteId,
+      sucursalId,
+      lineasSeleccionadas,
+      notas,
+      claveIdempotencia
+    );
 
     try {
       if (!navigator.onLine) {
@@ -232,7 +255,7 @@ export default function EscenaVentaPage() {
 
       const res = await api.post<SaleResponse>('/api/v1/ventas', payload);
 
-      // Refrescar stock de la jornada tras venta exitosa
+      // Refrescar stock de la jornada tras venta exitosa (incluso con reutilizada: true)
       await refreshJornada();
 
       const ventaId = res?.data?.id;
@@ -246,18 +269,25 @@ export default function EscenaVentaPage() {
       });
     } catch (err: unknown) {
       if (err instanceof ApiRequestError) {
+        // Conflicto de idempotencia (409): error claro y no reintentar
+        if (err.status === 409 || err.code === 'CLAVE_IDEMPOTENCIA_CONFLICTO') {
+          setErrorEnvio('Conflicto de idempotencia: esta venta ya fue registrada con datos diferentes. No se reintentará.');
+          setEnviando(false);
+          return;
+        }
+
         setErrorEnvio(err.message || 'Error del servidor al registrar la venta.');
         setEnviando(false);
         return;
       }
 
-      // Sin red o error de conexión → encolar para sync posterior
+      // Sin red o error de conexión → encolar para sync posterior con la misma clave
       try {
         await enqueueOperation({
           type: 'CREATE_PEDIDO',
           endpoint: '/api/v1/ventas',
           method: 'POST',
-          payload,
+          payload, // contiene la misma clave_idempotencia generada al confirmar
           maxRetries: 5,
         });
 

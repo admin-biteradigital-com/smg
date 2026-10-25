@@ -204,13 +204,71 @@ export async function markOperationFailed(
 }
 
 /**
- * Genera un ULID simplificado (timestamp + random).
- * Para producción se puede reemplazar por la librería `ulid`.
+ * Marca una operación como fallida definitivamente (ej. por conflicto de idempotencia)
+ * sin permitir nuevos reintentos automáticos.
  */
-export function generateUlid(): string {
-  const ts = Date.now().toString(36).toUpperCase().padStart(10, '0');
-  const rnd = Math.random().toString(36).substring(2, 12).toUpperCase().padStart(10, '0');
-  return `${ts}${rnd}`;
+export async function markOperationConflict(
+  id: number,
+  errorMessage: string,
+): Promise<void> {
+  await db.offline_queue
+    .where('id')
+    .equals(id)
+    .modify((item) => {
+      item.retries = item.maxRetries;
+      item.status = 'failed';
+      item.errorMessage = errorMessage;
+    });
+}
+
+const ULID_ENCODING = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+const ULID_ENCODING_LEN = ULID_ENCODING.length;
+
+/**
+ * Genera un ULID estándar canónico: 48-bit timestamp + 80-bit randomness (26 caracteres Base32 Crockford).
+ */
+export function generateUlid(now: number = Date.now()): string {
+  let timeStr = '';
+  let time = now;
+  for (let i = 9; i >= 0; i--) {
+    const mod = time % ULID_ENCODING_LEN;
+    timeStr = ULID_ENCODING.charAt(mod) + timeStr;
+    time = Math.floor(time / ULID_ENCODING_LEN);
+  }
+
+  const randomBytes = new Uint8Array(10);
+  if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+    crypto.getRandomValues(randomBytes);
+  } else {
+    for (let i = 0; i < 10; i++) {
+      randomBytes[i] = Math.floor(Math.random() * 256);
+    }
+  }
+
+  let randStr = '';
+  for (let i = 0; i < 16; i++) {
+    const bitPos = i * 5;
+    const bytePos = Math.floor(bitPos / 8);
+    const bitOffset = bitPos % 8;
+
+    const b0 = randomBytes[bytePos] ?? 0;
+    const b1 = bytePos + 1 < randomBytes.length ? (randomBytes[bytePos + 1] ?? 0) : 0;
+    const val16 = (b0 << 8) | b1;
+    const val = (val16 >> (16 - 5 - bitOffset)) & 31;
+    randStr += ULID_ENCODING.charAt(val);
+  }
+
+  return timeStr + randStr;
+}
+
+/**
+ * Valida si un string cumple el formato canónico de ULID (26 caracteres Base32 Crockford).
+ */
+export function isValidUlid(id: string): boolean {
+  if (typeof id !== 'string' || id.length !== 26) {
+    return false;
+  }
+  return /^[0123456789ABCDEFGHJKMNPQRSTVWXYZ]{26}$/i.test(id);
 }
 
 // ─── Bulk Sync Helpers ────────────────────────────────────────────────────────

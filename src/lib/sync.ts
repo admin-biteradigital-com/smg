@@ -1,9 +1,11 @@
-import { api, NetworkError } from '@/lib/api';
+import { api, NetworkError, ApiRequestError } from '@/lib/api';
 import {
   db,
   getPendingOperations,
   markOperationSynced,
   markOperationFailed,
+  markOperationConflict,
+  isValidUlid,
   bulkUpsertProductos,
   bulkUpsertClientes,
   bulkUpsertSucursales,
@@ -281,9 +283,11 @@ async function flushOfflineQueue(): Promise<SyncResult> {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       const isConflict =
-        error instanceof Error &&
-        'status' in error &&
-        (error as { status: number }).status === 409;
+        (error instanceof Error &&
+          'status' in error &&
+          (error as { status: number }).status === 409) ||
+        (error instanceof ApiRequestError &&
+          (error.status === 409 || error.code === 'CLAVE_IDEMPOTENCIA_CONFLICTO'));
       const isClientError =
         error instanceof Error &&
         'status' in error &&
@@ -292,11 +296,11 @@ async function flushOfflineQueue(): Promise<SyncResult> {
         (error as { status: number }).status !== 429;
       const willRetry = !isConflict && !isClientError && item.retries + 1 < item.maxRetries;
 
-      // Conflicto (409) — registrar pero no reintentar
+      // Conflicto (409) — marcar como fallida sin reintento
       if (isConflict) {
         result.conflicts++;
         if (item.id !== undefined) {
-          await markOperationFailed(item.id, `Conflicto: ${message}`);
+          await markOperationConflict(item.id, `Conflicto: ${message}`);
         }
         result.errors.push({ ulid: item.ulid, error: `CONFLICT: ${message}` });
         if (item.type === 'OPEN_JORNADA') {
@@ -305,7 +309,12 @@ async function flushOfflineQueue(): Promise<SyncResult> {
       } else {
         result.failed++;
         if (item.id !== undefined) {
-          await markOperationFailed(item.id, message);
+          if (isClientError) {
+            // Error 4xx de cliente (ej. validación): no reintentar
+            await markOperationConflict(item.id, message);
+          } else {
+            await markOperationFailed(item.id, message);
+          }
         }
         result.errors.push({ ulid: item.ulid, error: message });
 
@@ -320,30 +329,27 @@ async function flushOfflineQueue(): Promise<SyncResult> {
   return result;
 }
 
+export interface BatchSyncResultItem {
+  ulid: string;
+  status: 'ok' | 'conflict' | 'error';
+  error?: string;
+}
+
+export interface BatchSyncResponse {
+  results: BatchSyncResultItem[];
+}
+
 /**
- * Envía todas las operaciones pendientes en un solo request batch.
- * POST /api/v1/sync { operations: [...] }
+ * Procesa los resultados devueltos por el endpoint batch de sync.
+ * Actualiza la cola offline en IndexedDB según cada status:
+ * - 'ok'       -> marcada como sincronizada (eliminada de la cola).
+ * - 'conflict' -> marcada como fallida sin reintento.
+ * - 'error'    -> marcada como fallida incrementando retries (sin reintentar indefinidamente).
  */
-async function sendBatchSync(operations: OfflineQueueItem[]): Promise<SyncResult> {
-  type BatchResponse = {
-    results: Array<{
-      ulid: string;
-      status: 'ok' | 'conflict' | 'error';
-      error?: string;
-    }>;
-  };
-
-  const response = await api.post<BatchResponse>('/api/v1/sync', {
-    operations: operations.map(({ ulid, type, endpoint, method, payload, timestamp }) => ({
-      ulid,
-      type,
-      endpoint,
-      method,
-      payload,
-      timestamp,
-    })),
-  });
-
+export async function procesarResultadosBatch(
+  results: BatchSyncResultItem[],
+  operations: OfflineQueueItem[]
+): Promise<SyncResult> {
   const result: SyncResult = {
     success: true,
     synced: 0,
@@ -352,10 +358,9 @@ async function sendBatchSync(operations: OfflineQueueItem[]): Promise<SyncResult
     errors: [],
   };
 
-  // Crear mapa ulid → id local para marcar en DB
   const itemMap = new Map(operations.map((op) => [op.ulid, op]));
 
-  for (const r of response.results) {
+  for (const r of results) {
     const item = itemMap.get(r.ulid);
     if (!item || item.id === undefined) continue;
 
@@ -363,13 +368,15 @@ async function sendBatchSync(operations: OfflineQueueItem[]): Promise<SyncResult
       await markOperationSynced(item.id);
       result.synced++;
     } else if (r.status === 'conflict') {
-      await markOperationFailed(item.id, r.error ?? 'Conflicto');
+      // Conflicto de idempotencia: marcar como fallida sin reintento
+      await markOperationConflict(item.id, r.error ?? 'Conflicto de idempotencia');
       if (item.type === 'OPEN_JORNADA') {
         await db.jornadas.delete(item.ulid);
       }
       result.conflicts++;
-      result.errors.push({ ulid: r.ulid, error: `CONFLICT: ${r.error}` });
+      result.errors.push({ ulid: r.ulid, error: `CONFLICT: ${r.error ?? 'Conflicto'}` });
     } else {
+      // status === 'error' (ej. validación): marcar como fallida sin reintentar indefinidamente
       await markOperationFailed(item.id, r.error ?? 'Error desconocido');
       // Solo borrar en fallo definitivo si se agotaron los reintentos
       if (item.retries + 1 >= item.maxRetries && item.type === 'OPEN_JORNADA') {
@@ -384,10 +391,41 @@ async function sendBatchSync(operations: OfflineQueueItem[]): Promise<SyncResult
 }
 
 /**
+ * Envía todas las operaciones pendientes en un solo request batch.
+ * POST /api/v1/sync { operations: [...] }
+ */
+async function sendBatchSync(operations: OfflineQueueItem[]): Promise<SyncResult> {
+  const response = await api.post<BatchSyncResponse>('/api/v1/sync', {
+    operations: operations.map(({ ulid, type, endpoint, method, payload, timestamp }) => ({
+      ulid,
+      type,
+      endpoint,
+      method,
+      payload,
+      timestamp,
+    })),
+  });
+
+  return procesarResultadosBatch(response?.results ?? [], operations);
+}
+
+/**
  * Envía una operación individual al endpoint correspondiente.
  */
 async function sendOperation(item: OfflineQueueItem): Promise<unknown> {
-  const { endpoint, method, payload } = item;
+  let payload = item.payload;
+  // Si es venta/pedido y no trae clave_idempotencia en payload, asignar item.ulid si tiene formato válido
+  if (
+    (item.type === 'CREATE_PEDIDO' || item.type === 'CREATE_SALE') &&
+    payload &&
+    typeof payload === 'object' &&
+    !('clave_idempotencia' in payload) &&
+    isValidUlid(item.ulid)
+  ) {
+    payload = { ...payload, clave_idempotencia: item.ulid };
+  }
+
+  const { endpoint, method } = item;
   switch (method) {
     case 'POST':   return api.post(endpoint, payload);
     case 'PUT':    return api.put(endpoint, payload);

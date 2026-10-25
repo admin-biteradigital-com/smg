@@ -11,8 +11,9 @@ import {
   Camera,
   X,
 } from 'lucide-react';
-import { api, cargarStockVehiculo } from '@/lib/api';
+import { api, cargarStockVehiculo, ApiRequestError } from '@/lib/api';
 import type { StockDepositoItem } from '@/lib/api';
+import { generateUlid } from '@/lib/db';
 import { useJornada } from '@/contexts/JornadaContext';
 import JornadaLayout from '@/components/layout/JornadaLayout';
 import BarcodeScannerModal from '@/components/gestion/BarcodeScannerModal';
@@ -21,12 +22,32 @@ import type { CargaStockItemPayload } from '@/types';
 
 type DepositoStockItem = StockDepositoItem;
 
-interface ItemEnCarga {
+export interface ItemEnCarga {
   idProducto: number;
   nombreProducto: string;
   numeroLote: string;
   cantidad: number;
   maxDisponible?: number;
+}
+
+export function serializarItemsCarga(items: CargaStockItemPayload[]): string {
+  return items
+    .slice()
+    .sort((a, b) => a.idProducto - b.idProducto || a.numeroLote.localeCompare(b.numeroLote))
+    .map((i) => `${i.idProducto}:${i.numeroLote}:${i.cantidad}`)
+    .join('|');
+}
+
+export function obtenerOActualizarClaveCarga(
+  items: CargaStockItemPayload[],
+  estadoActual: { clave: string | null; signature: string | null }
+): { clave: string; signature: string; esReuso: boolean } {
+  const signature = serializarItemsCarga(items);
+  if (estadoActual.clave && estadoActual.signature === signature) {
+    return { clave: estadoActual.clave, signature, esReuso: true };
+  }
+  const nuevaClave = generateUlid();
+  return { clave: nuevaClave, signature, esReuso: false };
 }
 
 // ─── EscenaCargarVehiculoPage ─────────────────────────────────────────────────
@@ -87,6 +108,8 @@ export default function EscenaCargarVehiculoPage() {
 
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [claveIdempotencia, setClaveIdempotencia] = useState<string | null>(null);
+  const [signaturePrevio, setSignaturePrevio] = useState<string | null>(null);
 
   const isOnline = navigator.onLine;
 
@@ -166,7 +189,7 @@ export default function EscenaCargarVehiculoPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!jornada) return;
+    if (submitting || !jornada) return;
 
     if (itemsCarga.length === 0) {
       setSubmitError('Debes agregar al menos un producto para realizar la carga.');
@@ -187,16 +210,34 @@ export default function EscenaCargarVehiculoPage() {
       cantidad: item.cantidad,
     }));
 
+    // Reusar clave si los ítems son idénticos; generar nueva si cambiaron
+    const { clave, signature } = obtenerOActualizarClaveCarga(payloadItems, {
+      clave: claveIdempotencia,
+      signature: signaturePrevio,
+    });
+    setClaveIdempotencia(clave);
+    setSignaturePrevio(signature);
+
     try {
       await cargarStockVehiculo(jornada.id, {
         items: payloadItems,
         observaciones: observaciones.trim() || undefined,
+        claveIdempotencia: clave,
       });
 
+      // Éxito (incluso con reutilizada: true)
+      setClaveIdempotencia(null);
+      setSignaturePrevio(null);
       await refreshJornada();
       navigate('/jornada/ruta');
     } catch (err: unknown) {
       console.error('[EscenaCargarVehiculo] Error al cargar stock:', err);
+      if (err instanceof ApiRequestError && (err.status === 409 || err.code === 'CLAVE_IDEMPOTENCIA_CONFLICTO')) {
+        setSubmitError('Conflicto de idempotencia: esta carga ya fue procesada con datos diferentes. No se reintentará.');
+        setClaveIdempotencia(null);
+        setSignaturePrevio(null);
+        return;
+      }
       const message = err instanceof Error ? err.message : 'Error al procesar la carga de stock.';
       setSubmitError(message);
     } finally {
