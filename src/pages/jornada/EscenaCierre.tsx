@@ -2,7 +2,6 @@ import { useEffect, useState, useMemo } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import {
   CheckCircle2,
-  AlertTriangle,
   AlertCircle,
   Loader2,
   Truck,
@@ -20,8 +19,17 @@ import { useJornada } from '@/contexts/JornadaContext';
 import { useUpdate } from '@/contexts/UpdateContext';
 import JornadaLayout from '@/components/layout/JornadaLayout';
 import { cerrarJornada, ApiRequestError } from '@/lib/api';
-import { db, getPendingCount } from '@/lib/db';
+import { db } from '@/lib/db';
+import { extraerLineasDePayload, limpiarRegistroVentasConfirmadas } from '@/lib/stock-disponible';
 import type { ResumenCierre } from '@/types';
+
+export interface OperacionBloqueante {
+  id: string | number;
+  clienteNombre: string;
+  totalMonto: number;
+  estado: string;
+  motivo?: string;
+}
 
 // ─── EscenaCierrePage ─────────────────────────────────────────────────────────
 // Escena 6 del Modo Jornada: /jornada/cierre
@@ -34,26 +42,67 @@ export default function EscenaCierrePage() {
   const { updateAvailable, applyUpdate, isUpdating } = useUpdate();
 
   const [notasCierre, setNotasCierre] = useState('');
-  const [pendingQueueCount, setPendingQueueCount] = useState<number>(0);
+  const [operacionesBloqueantes, setOperacionesBloqueantes] = useState<OperacionBloqueante[]>([]);
   const [cerrando, setCerrando] = useState(false);
   const [errorCierre, setErrorCierre] = useState<string | null>(null);
   const [resumen, setResumen] = useState<ResumenCierre | null>(null);
 
-  // 1. Consultar operaciones pendientes en la cola offline al montar
+  // 1. Consultar operaciones pendientes o fallidas en la cola offline al montar
   useEffect(() => {
     async function checkPendingQueue() {
       try {
-        const count = await getPendingCount();
-        setPendingQueueCount(count);
+        const queueItems = await db.offline_queue.toArray();
+        const pendientesOFallidas = queueItems.filter(
+          (it) =>
+            it.status === 'pending' ||
+            it.status === 'syncing' ||
+            it.status === 'failed' ||
+            it.status === 'conflict'
+        );
+
+        if (pendientesOFallidas.length > 0) {
+          const clientes = await db.clientes.toArray();
+          const clientesMap = new Map<string, string>();
+          for (const c of clientes) {
+            clientesMap.set(String(c.id), c.razonSocial);
+          }
+
+          const bloqueantes: OperacionBloqueante[] = pendientesOFallidas.map((item) => {
+            const payload = item.payload as Record<string, unknown> | null;
+            const clienteId = payload?.id_cliente ?? payload?.idCliente;
+            const clienteNombre =
+              (clienteId ? clientesMap.get(String(clienteId)) : undefined) ||
+              (clienteId ? `Cliente #${clienteId}` : 'Cliente');
+
+            const lineas = extraerLineasDePayload(item.payload);
+            const totalMonto = lineas.reduce(
+              (acc, l) => acc + l.cantidad * (l.precio_unitario || 0),
+              0
+            );
+
+            const estadoMap: Record<string, string> = {
+              pending: 'Pendiente',
+              syncing: 'Sincronizando',
+              failed: 'Fallida',
+              conflict: 'Conflicto',
+            };
+
+            return {
+              id: item.ulid || item.id || Math.random(),
+              clienteNombre,
+              totalMonto,
+              estado: estadoMap[item.status] || item.status,
+              motivo: item.errorMessage,
+            };
+          });
+
+          setOperacionesBloqueantes(bloqueantes);
+        } else {
+          setOperacionesBloqueantes([]);
+        }
       } catch (err) {
         console.error('[EscenaCierre] Error al consultar cola offline:', err);
-        // Fallback a conteo directo de Dexie si getPendingCount falla
-        try {
-          const directCount = await db.offline_queue.count();
-          setPendingQueueCount(directCount);
-        } catch {
-          setPendingQueueCount(0);
-        }
+        setOperacionesBloqueantes([]);
       }
     }
     checkPendingQueue();
@@ -74,9 +123,9 @@ export default function EscenaCierrePage() {
     return <Navigate to="/jornada" replace />;
   }
 
-  // 3. Ejecutar Cierre de Jornada
+  // 3. Ejecutar Cierre de Jornada (bloqueado si hay operaciones pendientes o fallidas)
   const handleConfirmarCierre = async () => {
-    if (!jornada) return;
+    if (!jornada || operacionesBloqueantes.length > 0) return;
 
     setCerrando(true);
     setErrorCierre(null);
@@ -87,6 +136,9 @@ export default function EscenaCierrePage() {
 
       const resumenData = res.data;
       setResumen(resumenData);
+
+      // Limpiar ventas confirmadas locales al cerrar jornada
+      limpiarRegistroVentasConfirmadas();
 
       // Refrescar el contexto de jornada para limpiar la jornada activa
       await refreshJornada();
@@ -222,18 +274,61 @@ export default function EscenaCierrePage() {
         </div>
 
         <div className="flex-1 px-4 py-4 space-y-4">
-          {/* Advertencia si hay operaciones offline pendientes */}
-          {pendingQueueCount > 0 && (
-            <div className="flex items-start gap-3 bg-amber-500/10 border border-amber-500/25 rounded-2xl p-4 text-amber-300 animate-fade-in">
-              <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
-              <div className="text-xs space-y-1">
-                <p className="font-bold text-amber-200">
-                  {pendingQueueCount} {pendingQueueCount === 1 ? 'operación pendiente' : 'operaciones pendientes'} de sincronización
-                </p>
-                <p className="text-amber-300/80 leading-relaxed">
-                  Hay operaciones guardadas offline sin sincronizar con el servidor. Se recomienda esperar a tener conexión a internet para que se envíen antes de cerrar la jornada.
-                </p>
+          {/* Bloqueo si hay operaciones pendientes o fallidas en la cola offline */}
+          {operacionesBloqueantes.length > 0 && (
+            <div className="flex flex-col gap-3 bg-rose-500/10 border border-rose-500/30 rounded-2xl p-4 text-rose-300 animate-fade-in">
+              <div className="flex items-start gap-2.5">
+                <AlertCircle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+                <div className="text-xs space-y-1">
+                  <p className="font-bold text-rose-200">
+                    Cierre bloqueado: {operacionesBloqueantes.length}{' '}
+                    {operacionesBloqueantes.length === 1
+                      ? 'operación pendiente o fallida'
+                      : 'operaciones pendientes o fallidas'}
+                  </p>
+                  <p className="text-rose-300/80 leading-relaxed">
+                    No puedes cerrar la jornada porque existen operaciones pendientes o fallidas en la cola. Debes sincronizarlas o descartarlas antes de continuar para evitar inconsistencias de stock.
+                  </p>
+                </div>
               </div>
+
+              {/* Enumeración de operaciones */}
+              <div className="mt-1 space-y-1.5 border-t border-rose-500/20 pt-2.5">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-rose-200/90">
+                  Operaciones pendientes de resolver:
+                </p>
+                {operacionesBloqueantes.map((op) => (
+                  <div
+                    key={op.id}
+                    className="p-2.5 rounded-xl bg-zinc-900/90 border border-rose-500/20 text-xs space-y-1"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-bold text-zinc-100 truncate">{op.clienteNombre}</span>
+                      <span className="px-2 py-0.5 rounded-md bg-rose-500/20 text-rose-300 font-semibold text-[10px]">
+                        {op.estado}
+                      </span>
+                    </div>
+                    {op.totalMonto > 0 && (
+                      <p className="text-[11px] text-zinc-400 font-medium">
+                        Total venta: ${op.totalMonto.toLocaleString('es-CL')}
+                      </p>
+                    )}
+                    {op.motivo && (
+                      <p className="text-[10.5px] text-rose-300/90 font-mono bg-rose-950/40 p-1.5 rounded break-words">
+                        Motivo: {op.motivo}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => navigate('/jornada/ruta')}
+                className="mt-1 w-full py-2.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition-all text-center"
+              >
+                Ir a En Ruta para resolver operaciones
+              </button>
             </div>
           )}
 
@@ -332,13 +427,18 @@ export default function EscenaCierrePage() {
 
             <button
               onClick={handleConfirmarCierre}
-              disabled={cerrando}
+              disabled={cerrando || operacionesBloqueantes.length > 0}
               className="flex-1 max-w-xs py-3.5 bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 disabled:opacity-50 disabled:pointer-events-none text-white font-bold rounded-2xl shadow-lg shadow-rose-600/20 flex items-center justify-center gap-2 transition-all active:scale-95 text-xs"
             >
               {cerrando ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
                   Cerrando jornada...
+                </>
+              ) : operacionesBloqueantes.length > 0 ? (
+                <>
+                  <AlertCircle className="w-4 h-4" />
+                  Cierre Bloqueado
                 </>
               ) : (
                 <>

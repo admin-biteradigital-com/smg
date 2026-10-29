@@ -20,20 +20,28 @@ import BarcodeScannerModal from '@/components/gestion/BarcodeScannerModal';
 import { useBarcodeScannerSupport, procesarEscaneoVenta } from '@/lib/jornada-scanner';
 import { api, ApiRequestError, NetworkError } from '@/lib/api';
 import { db, enqueueOperation, generateUlid } from '@/lib/db';
+import {
+  calcularStockDisponible,
+  agruparStockPorProducto,
+  obtenerVentasLocalesParaStock,
+  getUltimoRefrescoJornada,
+  registrarVentaConfirmada,
+} from '@/lib/stock-disponible';
 import type { Cliente, Sucursal } from '@/types';
 
 // ─── Tipos locales ────────────────────────────────────────────────────────────
 
 export interface LineaCarrito {
   idProducto: number;
-  idLote: number;
+  idLote?: number;
   nombreProducto: string;
   codigoProducto: string;
-  numeroLote: string;
+  numeroLote?: string;
   cantidadDisponible: number;
   cantidad: number;
   precioUnitario: number;
   unidadMedida: string;
+  proximoVencimiento?: string;
 }
 
 export interface SalePayload {
@@ -137,7 +145,7 @@ export default function EscenaVentaPage() {
     loadClienteData();
   }, [clienteId, sucursalId]);
 
-  // 2. Inicializar líneas del carrito con los ítems del stock del vehículo
+  // 2. Inicializar líneas del carrito agrupadas por producto con stock disponible real (D1 y D2)
   useEffect(() => {
     async function initStockLines() {
       if (!jornada?.stockVehiculo) return;
@@ -150,22 +158,55 @@ export default function EscenaVentaPage() {
           preciosMap.set(String(p.id), p.precioBase || p.precioPublico || 0);
         }
 
-        const lineasIniciales: LineaCarrito[] = jornada.stockVehiculo.map((item) => {
-          const precioSugerido = preciosMap.get(String(item.idProducto)) ?? 0;
-          return {
-            idProducto: item.idProducto,
-            idLote: item.idLote,
-            nombreProducto: item.nombreProducto,
-            codigoProducto: item.codigoProducto,
-            numeroLote: item.numeroLote,
-            cantidadDisponible: item.cantidadDisponible,
-            cantidad: 0,
-            precioUnitario: precioSugerido,
-            unidadMedida: item.unidadMedida || 'unidad',
-          };
-        });
+        // Obtener operaciones locales pendientes/fallidas y confirmadas no reflejadas
+        const queueItems = await db.offline_queue.toArray();
+        const ventasLocales = obtenerVentasLocalesParaStock(queueItems);
+        const ultimoRefresco = getUltimoRefrescoJornada();
 
-        setCarrito(lineasIniciales);
+        // Calcular stock disponible por producto
+        const stockDisponibleMap = calcularStockDisponible(
+          jornada.stockVehiculo,
+          ventasLocales,
+          ultimoRefresco
+        );
+
+        // Agrupar lotes en tarjetas por producto
+        const productosAgrupados = agruparStockPorProducto(
+          jornada.stockVehiculo,
+          stockDisponibleMap
+        );
+
+        setCarrito((prev) => {
+          const prevMap = new Map<number, LineaCarrito>();
+          for (const item of prev) {
+            prevMap.set(item.idProducto, item);
+          }
+
+          return productosAgrupados.map((prod) => {
+            const precioSugerido = preciosMap.get(String(prod.idProducto)) ?? 0;
+            const existente = prevMap.get(prod.idProducto);
+            const precioUnitario =
+              existente?.precioUnitario !== undefined
+                ? existente.precioUnitario
+                : precioSugerido;
+            const cantidadPrevia = existente?.cantidad ?? 0;
+            const cantidad = Math.max(
+              0,
+              Math.min(prod.cantidadDisponible, cantidadPrevia)
+            );
+
+            return {
+              idProducto: prod.idProducto,
+              nombreProducto: prod.nombreProducto,
+              codigoProducto: prod.codigoProducto,
+              cantidadDisponible: prod.cantidadDisponible,
+              cantidad,
+              precioUnitario,
+              unidadMedida: prod.unidadMedida || 'unidad',
+              proximoVencimiento: prod.proximoVencimiento,
+            };
+          });
+        });
       } catch (err) {
         console.error('[EscenaVenta] Error al inicializar stock del vehículo:', err);
       }
@@ -174,11 +215,11 @@ export default function EscenaVentaPage() {
     initStockLines();
   }, [jornada?.stockVehiculo]);
 
-  // Modificar cantidad en carrito
-  const handleUpdateCantidad = (idProducto: number, idLote: number, nuevaCantidad: number) => {
+  // Modificar cantidad en carrito (agrupado por producto)
+  const handleUpdateCantidad = (idProducto: number, nuevaCantidad: number) => {
     setCarrito((prev) =>
       prev.map((l) => {
-        if (l.idProducto === idProducto && l.idLote === idLote) {
+        if (l.idProducto === idProducto) {
           const val = Math.max(0, Math.min(l.cantidadDisponible, nuevaCantidad));
           return { ...l, cantidad: val };
         }
@@ -188,10 +229,10 @@ export default function EscenaVentaPage() {
   };
 
   // Modificar precio unitario en caso de ser necesario
-  const handleUpdatePrecio = (idProducto: number, idLote: number, nuevoPrecio: number) => {
+  const handleUpdatePrecio = (idProducto: number, nuevoPrecio: number) => {
     setCarrito((prev) =>
       prev.map((l) => {
-        if (l.idProducto === idProducto && l.idLote === idLote) {
+        if (l.idProducto === idProducto) {
           return { ...l, precioUnitario: Math.max(0, nuevoPrecio) };
         }
         return l;
@@ -206,8 +247,7 @@ export default function EscenaVentaPage() {
     return carrito.filter(
       (item) =>
         item.nombreProducto.toLowerCase().includes(q) ||
-        item.codigoProducto.toLowerCase().includes(q) ||
-        item.numeroLote.toLowerCase().includes(q)
+        item.codigoProducto.toLowerCase().includes(q)
     );
   }, [carrito, busqueda]);
 
@@ -253,7 +293,11 @@ export default function EscenaVentaPage() {
         throw new NetworkError('Sin conexión a internet');
       }
 
+      const confirmedAt = Date.now();
       const res = await api.post<SaleResponse>('/api/v1/ventas', payload);
+
+      // Registrar venta confirmada para que el stock no salte si cae la señal antes/durante el refresco
+      registrarVentaConfirmada(payload.lineas, confirmedAt);
 
       // Refrescar stock de la jornada tras venta exitosa (incluso con reutilizada: true)
       await refreshJornada();
@@ -434,7 +478,7 @@ export default function EscenaVentaPage() {
 
               return (
                 <div
-                  key={`${item.idProducto}-${item.idLote}`}
+                  key={item.idProducto}
                   className={`bg-zinc-900 border rounded-2xl p-4 flex flex-col gap-3 transition-all ${
                     tieneCantidad
                       ? 'border-brand-500/50 ring-1 ring-brand-500/30'
@@ -453,9 +497,11 @@ export default function EscenaVentaPage() {
                         <span className="text-[10px] text-zinc-500 font-mono">
                           {item.codigoProducto}
                         </span>
-                        <span className="text-[10px] text-zinc-400 bg-zinc-800 px-1.5 py-0.5 rounded font-mono">
-                          Lote: {item.numeroLote}
-                        </span>
+                        {item.proximoVencimiento && (
+                          <span className="text-[10px] text-zinc-400 bg-zinc-800 px-1.5 py-0.5 rounded font-mono">
+                            Vence: {item.proximoVencimiento}
+                          </span>
+                        )}
                       </div>
                     </div>
 
@@ -484,7 +530,6 @@ export default function EscenaVentaPage() {
                         onChange={(e) =>
                           handleUpdatePrecio(
                             item.idProducto,
-                            item.idLote,
                             Number(e.target.value) || 0
                           )
                         }
@@ -499,7 +544,7 @@ export default function EscenaVentaPage() {
                       <button
                         type="button"
                         onClick={() =>
-                          handleUpdateCantidad(item.idProducto, item.idLote, item.cantidad - 1)
+                          handleUpdateCantidad(item.idProducto, item.cantidad - 1)
                         }
                         disabled={item.cantidad === 0}
                         aria-label="Reducir cantidad"
@@ -516,7 +561,6 @@ export default function EscenaVentaPage() {
                         onChange={(e) =>
                           handleUpdateCantidad(
                             item.idProducto,
-                            item.idLote,
                             Number(e.target.value) || 0
                           )
                         }
@@ -528,7 +572,7 @@ export default function EscenaVentaPage() {
                       <button
                         type="button"
                         onClick={() =>
-                          handleUpdateCantidad(item.idProducto, item.idLote, item.cantidad + 1)
+                          handleUpdateCantidad(item.idProducto, item.cantidad + 1)
                         }
                         disabled={sinStock || item.cantidad >= item.cantidadDisponible}
                         aria-label="Aumentar cantidad"

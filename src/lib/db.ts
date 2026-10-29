@@ -221,6 +221,28 @@ export async function markOperationConflict(
     });
 }
 
+/**
+ * Reintenta una operación fallida: la vuelve a estado 'pending',
+ * reinicia su contador de reintentos a 0 y borra el mensaje de error.
+ */
+export async function retryOperation(id: number): Promise<void> {
+  await db.offline_queue
+    .where('id')
+    .equals(id)
+    .modify((item) => {
+      item.status = 'pending';
+      item.retries = 0;
+      item.errorMessage = undefined;
+    });
+}
+
+/**
+ * Descarta una operación de la cola offline de forma definitiva.
+ */
+export async function discardOperation(id: number): Promise<void> {
+  await db.offline_queue.delete(id);
+}
+
 const ULID_ENCODING = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 const ULID_ENCODING_LEN = ULID_ENCODING.length;
 

@@ -1,4 +1,10 @@
-import { api, NetworkError, ApiRequestError } from '@/lib/api';
+import { api, NetworkError, ApiRequestError, fetchJornadaActiva } from '@/lib/api';
+import {
+  registrarRefrescoJornada,
+  registrarVentaConfirmada,
+  extraerLineasDePayload,
+  esOperacionDeVenta,
+} from '@/lib/stock-disponible';
 import {
   db,
   getPendingOperations,
@@ -206,6 +212,21 @@ export async function runSync(): Promise<SyncResult> {
     result.conflicts += flushResult.conflicts;
     result.errors.push(...flushResult.errors);
 
+    // Si hubo operaciones sincronizadas con éxito, refrescar la jornada activa
+    if (flushResult.synced > 0) {
+      try {
+        const fetchStart = Date.now();
+        const jornadaRes = await fetchJornadaActiva();
+        if (jornadaRes?.data && jornadaRes.data.id) {
+          await db.jornadas.put(jornadaRes.data);
+          registrarRefrescoJornada(fetchStart);
+          console.info('[Sync] Jornada activa refrescada tras sync exitoso');
+        }
+      } catch (jornadaErr) {
+        console.warn('[Sync] No se pudo refrescar jornada tras sync:', jornadaErr);
+      }
+    }
+
     // ── Paso 2: Pull de datos frescos ───────────────────────────
     await pullFreshData();
 
@@ -277,6 +298,12 @@ async function flushOfflineQueue(): Promise<SyncResult> {
     try {
       await sendOperation(item);
       if (item.id !== undefined) {
+        if (esOperacionDeVenta(item)) {
+          const lineas = extraerLineasDePayload(item.payload);
+          if (lineas.length > 0) {
+            registrarVentaConfirmada(lineas, Date.now());
+          }
+        }
         await markOperationSynced(item.id);
       }
       result.synced++;
@@ -365,6 +392,12 @@ export async function procesarResultadosBatch(
     if (!item || item.id === undefined) continue;
 
     if (r.status === 'ok') {
+      if (esOperacionDeVenta(item)) {
+        const lineas = extraerLineasDePayload(item.payload);
+        if (lineas.length > 0) {
+          registrarVentaConfirmada(lineas, Date.now());
+        }
+      }
       await markOperationSynced(item.id);
       result.synced++;
     } else if (r.status === 'conflict') {

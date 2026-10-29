@@ -20,6 +20,7 @@ import { useClientesDiscrepancia } from '@/hooks/useClientesDiscrepancia';
 import { db } from '@/lib/db';
 import { runSync } from '@/lib/sync';
 import { getClientesSaldosPendientes } from '@/lib/api';
+import PanelOperacionesCola from './PanelOperacionesCola';
 import type { Sucursal } from '@/types';
 
 // ─── Normalización para búsqueda ─────────────────────────────────────────────
@@ -222,6 +223,9 @@ export default function EscenaRutaClientesPage() {
             )}
           </div>
         </div>
+
+        {/* Panel de operaciones pendientes y fallidas visibles (D3) */}
+        <PanelOperacionesCola />
 
         {/* Aviso no bloqueante de discrepancia de clientes */}
         {discrepancia && (

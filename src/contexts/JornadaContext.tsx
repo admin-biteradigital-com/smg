@@ -3,6 +3,7 @@ import { fetchJornadaActiva } from '@/lib/api';
 import { ApiRequestError } from '@/lib/api';
 import { db } from '@/lib/db';
 import { onSyncStatusChange } from '@/lib/sync';
+import { registrarRefrescoJornada } from '@/lib/stock-disponible';
 import type { Jornada, StockVehiculoItem as StockVehiculoItemBackend } from '@/types';
 
 // ─── Tipos del contexto ──────────────────────────────────────────────────────
@@ -90,11 +91,13 @@ export function JornadaProvider({ children }: { children: React.ReactNode }) {
     // 1. Si hay conexión, intentar consultar la verdad del servidor
     if (navigator.onLine) {
       try {
+        const fetchStart = Date.now();
         const res = await fetchJornadaActiva();
 
         if (res.data && res.data.id) {
-          // Persistir jornada activa en Dexie
+          // Persistir jornada activa en Dexie y registrar timestamp de refresco
           await db.jornadas.put(res.data);
+          registrarRefrescoJornada(fetchStart);
           setJornada(mapJornadaToActiva(res.data));
           setLoading(false);
           return;
@@ -156,8 +159,8 @@ export function JornadaProvider({ children }: { children: React.ReactNode }) {
     window.addEventListener('online', handleOnline);
 
     const unsubscribeSync = onSyncStatusChange((status) => {
-      // Reconciliar estado cuando el sync termine de procesar la cola (éxito o conflicto)
-      if (status === 'online' || status === 'conflict') {
+      // Reconciliar estado cuando el sync termine de procesar la cola (éxito, conflicto o fallo parcial)
+      if (status === 'online' || status === 'conflict' || status === 'pending') {
         refreshJornada();
       }
     });
