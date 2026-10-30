@@ -12,7 +12,10 @@ import {
 } from 'lucide-react';
 import { db, retryOperation, discardOperation } from '@/lib/db';
 import { runSync, onSyncStatusChange } from '@/lib/sync';
-import { extraerLineasDePayload } from '@/lib/stock-disponible';
+import {
+  extraerLineasDePayload,
+  clasificarOperacionVisible,
+} from '@/lib/stock-disponible';
 import type { OfflineQueueItem, Cliente } from '@/types';
 
 export interface OperacionDetallada {
@@ -84,16 +87,19 @@ export default function PanelOperacionesCola({
 
       // Ordenar: fallidas primero, luego conflictos, luego pendientes
       detalladas.sort((a, b) => {
-        const priority = (s: string) => (s === 'failed' ? 1 : s === 'conflict' ? 2 : 3);
-        return priority(a.item.status) - priority(b.item.status);
+        const infoA = clasificarOperacionVisible(a.item);
+        const infoB = clasificarOperacionVisible(b.item);
+        const priority = (s: string) => (s === 'fallida' ? 1 : s === 'conflicto' ? 2 : 3);
+        return priority(infoA.estadoVisible) - priority(infoB.estadoVisible);
       });
 
       setOperaciones(detalladas);
 
       // Si hay fallidas o conflictos, expandir automáticamente el panel
-      const tieneProblemas = detalladas.some(
-        (o) => o.item.status === 'failed' || o.item.status === 'conflict'
-      );
+      const tieneProblemas = detalladas.some((o) => {
+        const info = clasificarOperacionVisible(o.item);
+        return info.estadoVisible === 'fallida' || info.estadoVisible === 'conflicto';
+      });
       if (tieneProblemas) {
         setExpanded(true);
       }
@@ -150,11 +156,16 @@ export default function PanelOperacionesCola({
     return null;
   }
 
-  const fallidasCount = operaciones.filter((o) => o.item.status === 'failed').length;
-  const conflictosCount = operaciones.filter((o) => o.item.status === 'conflict').length;
-  const pendientesCount = operaciones.filter(
-    (o) => o.item.status === 'pending' || o.item.status === 'syncing'
+  const fallidasCount = operaciones.filter(
+    (o) => clasificarOperacionVisible(o.item).estadoVisible === 'fallida'
   ).length;
+  const conflictosCount = operaciones.filter(
+    (o) => clasificarOperacionVisible(o.item).estadoVisible === 'conflicto'
+  ).length;
+  const pendientesCount = operaciones.filter((o) => {
+    const estado = clasificarOperacionVisible(o.item).estadoVisible;
+    return estado === 'pendiente' || estado === 'sincronizando';
+  }).length;
 
   const tieneCriticos = fallidasCount > 0 || conflictosCount > 0;
 
@@ -214,11 +225,10 @@ export default function PanelOperacionesCola({
       {expanded && (
         <div className="border-t border-zinc-800/80 p-3 space-y-2.5 bg-zinc-950/40">
           {operaciones.map(({ item, clienteNombre, totalMonto, totalUnidades }) => {
-            const esFallida = item.status === 'failed';
-            const esConflicto =
-              item.status === 'conflict' ||
-              Boolean(item.errorMessage?.toLowerCase().includes('conflicto'));
-            const esSyncing = item.status === 'syncing';
+            const info = clasificarOperacionVisible(item);
+            const esFallida = info.estadoVisible === 'fallida';
+            const esConflicto = info.estadoVisible === 'conflicto';
+            const esSyncing = info.estadoVisible === 'sincronizando';
             const itemId = item.id;
             const confirmandoEste = itemId !== undefined && confirmandoDescarteId === itemId;
             const procesandoEste = itemId !== undefined && procesandoId === itemId;
@@ -248,7 +258,12 @@ export default function PanelOperacionesCola({
                         </span>
                       )}
                       {totalUnidades > 0 && ` (${totalUnidades} uds)`}
-                      <span className="text-zinc-600 font-mono ml-1">· {item.ulid.slice(-6)}</span>
+                      <span
+                        className="text-zinc-500 font-mono ml-1"
+                        title="Referencia interna (últimos 6 caracteres del ULID)"
+                      >
+                        · Ref: #{item.ulid.slice(-6)}
+                      </span>
                     </div>
                   </div>
 
@@ -276,10 +291,21 @@ export default function PanelOperacionesCola({
                 </div>
 
                 {/* Fila 2: Motivo exacto devuelto por SIGLO en fallidas o conflictos */}
-                {(esFallida || esConflicto) && item.errorMessage && (
+                {info.motivo && (
                   <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/25 text-rose-300 text-[11px] leading-relaxed">
                     <p className="font-semibold text-rose-200 mb-0.5">Motivo del rechazo:</p>
-                    <p className="font-mono text-[10.5px] break-words">{item.errorMessage}</p>
+                    <p className="font-mono text-[10.5px] break-words">{info.motivo}</p>
+                  </div>
+                )}
+
+                {/* Fila 2 alt: Último error de red o timeout en operaciones pendientes */}
+                {!info.motivo && info.ultimoError && (
+                  <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/25 text-amber-300 text-[11px] leading-relaxed">
+                    <p className="font-semibold text-amber-200 mb-0.5">Último error de conexión:</p>
+                    <p className="font-mono text-[10.5px] break-words">{info.ultimoError}</p>
+                    <p className="text-[10px] text-amber-400/80 mt-1">
+                      Reintento {item.retries} de {item.maxRetries} pendiente.
+                    </p>
                   </div>
                 )}
 
@@ -324,8 +350,8 @@ export default function PanelOperacionesCola({
                         Descartar
                       </button>
 
-                      {/* Reintentar: solo en operaciones fallidas por error, NO en conflicto */}
-                      {esFallida && !esConflicto && (
+                      {/* Reintentar: solo si permiteReintentar (ej. rechazos de stock o fallidas reintentables) */}
+                      {info.permiteReintentar && (
                         <button
                           type="button"
                           onClick={() => itemId !== undefined && handleReintentar(itemId)}

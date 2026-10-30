@@ -318,3 +318,75 @@ export function obtenerVentasLocalesParaStock(
 
   return ventas;
 }
+
+// ── Clasificación de Operaciones en Cola para UI ─────────────────────────────
+
+export type EstadoVisibleOperacion = 'fallida' | 'conflicto' | 'sincronizando' | 'pendiente';
+
+export interface InfoOperacionVisible {
+  estadoVisible: EstadoVisibleOperacion;
+  etiqueta: string;
+  motivo?: string;
+  ultimoError?: string;
+  permiteReintentar: boolean;
+  permiteDescartar: boolean;
+}
+
+/**
+ * Clasifica una operación de la cola offline para presentación uniforme en UI
+ * (Panel de operaciones en En Ruta y Bloqueo de Cierre de Jornada).
+ */
+export function clasificarOperacionVisible(item: OfflineQueueItem): InfoOperacionVisible {
+  const esConflicto =
+    item.status === 'conflict' ||
+    item.tipoError === 'conflicto' ||
+    Boolean(item.errorMessage?.toLowerCase().includes('conflicto'));
+
+  const esFallida =
+    item.status === 'failed' ||
+    item.tipoError === 'rechazo' ||
+    (item.retries >= item.maxRetries && item.status !== 'pending' && item.status !== 'syncing');
+
+  const esSyncing = item.status === 'syncing';
+
+  if (esConflicto) {
+    return {
+      estadoVisible: 'conflicto',
+      etiqueta: 'Conflicto',
+      motivo: item.errorMessage || 'Conflicto de clave de idempotencia',
+      permiteReintentar: false,
+      permiteDescartar: true,
+    };
+  }
+
+  if (esFallida) {
+    return {
+      estadoVisible: 'fallida',
+      etiqueta: 'Fallida',
+      motivo: item.errorMessage || 'Operación rechazada por el servidor',
+      permiteReintentar: true,
+      permiteDescartar: true,
+    };
+  }
+
+  if (esSyncing) {
+    return {
+      estadoVisible: 'sincronizando',
+      etiqueta: 'Sincronizando',
+      permiteReintentar: false,
+      permiteDescartar: false,
+    };
+  }
+
+  const tieneFalloTransitorio =
+    (item.retries > 0 || item.tipoError === 'transitorio') && Boolean(item.errorMessage);
+
+  return {
+    estadoVisible: 'pendiente',
+    etiqueta: 'Pendiente',
+    ultimoError: tieneFalloTransitorio ? item.errorMessage : undefined,
+    permiteReintentar: false,
+    permiteDescartar: true,
+  };
+}
+

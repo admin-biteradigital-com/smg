@@ -20,7 +20,11 @@ import { useUpdate } from '@/contexts/UpdateContext';
 import JornadaLayout from '@/components/layout/JornadaLayout';
 import { cerrarJornada, ApiRequestError } from '@/lib/api';
 import { db } from '@/lib/db';
-import { extraerLineasDePayload, limpiarRegistroVentasConfirmadas } from '@/lib/stock-disponible';
+import {
+  extraerLineasDePayload,
+  limpiarRegistroVentasConfirmadas,
+  clasificarOperacionVisible,
+} from '@/lib/stock-disponible';
 import type { ResumenCierre } from '@/types';
 
 export interface OperacionBloqueante {
@@ -80,20 +84,21 @@ export default function EscenaCierrePage() {
               0
             );
 
-            const estadoMap: Record<string, string> = {
-              pending: 'Pendiente',
-              syncing: 'Sincronizando',
-              failed: 'Fallida',
-              conflict: 'Conflicto',
-            };
+            const info = clasificarOperacionVisible(item);
 
             return {
               id: item.ulid || item.id || Math.random(),
               clienteNombre,
               totalMonto,
-              estado: estadoMap[item.status] || item.status,
-              motivo: item.errorMessage,
+              estado: info.etiqueta,
+              motivo: info.motivo || info.ultimoError,
             };
+          });
+
+          // Ordenar: fallidas y conflictos primero, luego pendientes
+          bloqueantes.sort((a, b) => {
+            const priority = (s: string) => (s === 'Fallida' ? 1 : s === 'Conflicto' ? 2 : 3);
+            return priority(a.estado) - priority(b.estado);
           });
 
           setOperacionesBloqueantes(bloqueantes);
@@ -304,7 +309,15 @@ export default function EscenaCierrePage() {
                   >
                     <div className="flex items-center justify-between gap-2">
                       <span className="font-bold text-zinc-100 truncate">{op.clienteNombre}</span>
-                      <span className="px-2 py-0.5 rounded-md bg-rose-500/20 text-rose-300 font-semibold text-[10px]">
+                      <span
+                        className={`px-2 py-0.5 rounded-md font-semibold text-[10px] ${
+                          op.estado === 'Fallida'
+                            ? 'bg-rose-500/20 text-rose-300'
+                            : op.estado === 'Conflicto'
+                            ? 'bg-purple-500/20 text-purple-300'
+                            : 'bg-amber-500/20 text-amber-300'
+                        }`}
+                      >
                         {op.estado}
                       </span>
                     </div>

@@ -212,6 +212,8 @@ export type OfflineOperationType =
 
 export type OfflineQueueStatus = 'pending' | 'syncing' | 'failed' | 'conflict';
 
+export type TipoErrorOperacion = 'rechazo' | 'transitorio' | 'conflicto';
+
 export interface OfflineQueueItem {
   id?: number;          // Autoincrement local PK
   ulid: string;         // ID único ULID generado en cliente
@@ -223,6 +225,7 @@ export interface OfflineQueueItem {
   retries: number;
   maxRetries: number;
   errorMessage?: string;
+  tipoError?: TipoErrorOperacion;
   timestamp: number;    // Date.now()
   syncedAt?: number;
 }

@@ -10,6 +10,7 @@ import {
   getPendingOperations,
   markOperationSynced,
   markOperationFailed,
+  markOperationTransientError,
   markOperationConflict,
   isValidUlid,
   bulkUpsertProductos,
@@ -266,7 +267,7 @@ export async function runSync(): Promise<SyncResult> {
  * Envía las operaciones pendientes al servidor en orden FIFO.
  * Usa el endpoint de batch si hay múltiples items, o individual si hay uno solo.
  */
-async function flushOfflineQueue(): Promise<SyncResult> {
+export async function flushOfflineQueue(): Promise<SyncResult> {
   const pending = await getPendingOperations();
   const result: SyncResult = {
     success: true,
@@ -320,10 +321,10 @@ async function flushOfflineQueue(): Promise<SyncResult> {
         'status' in error &&
         (error as { status: number }).status >= 400 &&
         (error as { status: number }).status < 500 &&
+        (error as { status: number }).status !== 408 &&
         (error as { status: number }).status !== 429;
-      const willRetry = !isConflict && !isClientError && item.retries + 1 < item.maxRetries;
 
-      // Conflicto (409) — marcar como fallida sin reintento
+      // Conflicto (409) — marcar como conflicto sin reintento
       if (isConflict) {
         result.conflicts++;
         if (item.id !== undefined) {
@@ -333,19 +334,25 @@ async function flushOfflineQueue(): Promise<SyncResult> {
         if (item.type === 'OPEN_JORNADA') {
           await db.jornadas.delete(item.ulid);
         }
-      } else {
+      } else if (isClientError) {
+        // Rechazo definitivo de cliente / negocio (4xx excepto 408 y 429): fallo definitivo inmediato
         result.failed++;
         if (item.id !== undefined) {
-          if (isClientError) {
-            // Error 4xx de cliente (ej. validación): no reintentar
-            await markOperationConflict(item.id, message);
-          } else {
-            await markOperationFailed(item.id, message);
-          }
+          await markOperationFailed(item.id, message);
+        }
+        result.errors.push({ ulid: item.ulid, error: message });
+        if (item.type === 'OPEN_JORNADA') {
+          await db.jornadas.delete(item.ulid);
+        }
+      } else {
+        // Error transitorio (red, timeout, 5xx, 408, 429): reintento automático mientras retries < maxRetries
+        result.failed++;
+        if (item.id !== undefined) {
+          await markOperationTransientError(item.id, message);
         }
         result.errors.push({ ulid: item.ulid, error: message });
 
-        // Solo revertir la jornada optimista si es un fallo definitivo (no hay más reintentos o error 4xx no recuperable)
+        const willRetry = item.retries + 1 < item.maxRetries;
         if (!willRetry && item.type === 'OPEN_JORNADA') {
           await db.jornadas.delete(item.ulid);
         }
@@ -370,8 +377,8 @@ export interface BatchSyncResponse {
  * Procesa los resultados devueltos por el endpoint batch de sync.
  * Actualiza la cola offline en IndexedDB según cada status:
  * - 'ok'       -> marcada como sincronizada (eliminada de la cola).
- * - 'conflict' -> marcada como fallida sin reintento.
- * - 'error'    -> marcada como fallida incrementando retries (sin reintentar indefinidamente).
+ * - 'conflict' -> marcada como conflicto sin reintento automático.
+ * - 'error'    -> rechazo de SIGLO: marcada como fallida inmediata ('rechazo').
  */
 export async function procesarResultadosBatch(
   results: BatchSyncResultItem[],
@@ -401,7 +408,7 @@ export async function procesarResultadosBatch(
       await markOperationSynced(item.id);
       result.synced++;
     } else if (r.status === 'conflict') {
-      // Conflicto de idempotencia: marcar como fallida sin reintento
+      // Conflicto de idempotencia: marcar como conflicto sin reintento
       await markOperationConflict(item.id, r.error ?? 'Conflicto de idempotencia');
       if (item.type === 'OPEN_JORNADA') {
         await db.jornadas.delete(item.ulid);
@@ -409,10 +416,10 @@ export async function procesarResultadosBatch(
       result.conflicts++;
       result.errors.push({ ulid: r.ulid, error: `CONFLICT: ${r.error ?? 'Conflicto'}` });
     } else {
-      // status === 'error' (ej. validación): marcar como fallida sin reintentar indefinidamente
+      // status === 'error' (rechazo procesado por SIGLO, ej. stock insuficiente o validación)
+      // Pasa a 'failed' de inmediato como rechazo definitivo
       await markOperationFailed(item.id, r.error ?? 'Error desconocido');
-      // Solo borrar en fallo definitivo si se agotaron los reintentos
-      if (item.retries + 1 >= item.maxRetries && item.type === 'OPEN_JORNADA') {
+      if (item.type === 'OPEN_JORNADA') {
         await db.jornadas.delete(item.ulid);
       }
       result.failed++;

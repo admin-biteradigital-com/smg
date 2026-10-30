@@ -9,6 +9,7 @@ import type {
   Pedido,
   VentaCobro,
   OfflineQueueItem,
+  TipoErrorOperacion,
   BorradorPedido,
   Vehiculo,
   Ruta,
@@ -169,12 +170,13 @@ export async function enqueueOperation(
 }
 
 /**
- * Obtiene todas las operaciones pendientes, ordenadas por timestamp (FIFO).
+ * Obtiene todas las operaciones pendientes de sincronizar, ordenadas por timestamp (FIFO).
+ * Solo incluye operaciones en estado 'pending' que no hayan agotado reintentos.
  */
 export async function getPendingOperations(): Promise<OfflineQueueItem[]> {
   return db.offline_queue
     .where('status')
-    .anyOf(['pending', 'failed'])
+    .equals('pending')
     .and((item) => item.retries < item.maxRetries)
     .sortBy('timestamp');
 }
@@ -187,24 +189,49 @@ export async function markOperationSynced(id: number): Promise<void> {
 }
 
 /**
- * Marca una operación como fallida e incrementa el contador de reintentos.
+ * Marca una operación como fallida.
+ * - 'rechazo' (por defecto): rechazo procesado por SIGLO (ej. stock insuficiente, validación 4xx).
+ *   Pasa de inmediato a status 'failed' y agota retries (= maxRetries) para evitar reintentos automáticos.
+ * - 'transitorio': error de red, timeout, 5xx, 408 o 429.
+ *   Incrementa retries en 1; si retries >= maxRetries pasa a 'failed', si no permanece como 'pending'.
+ * - 'conflicto': conflicto de idempotencia o estado concurrente.
  */
 export async function markOperationFailed(
   id: number,
   errorMessage: string,
+  tipoError: TipoErrorOperacion = 'rechazo',
 ): Promise<void> {
   await db.offline_queue
     .where('id')
     .equals(id)
     .modify((item) => {
-      item.retries += 1;
-      item.status = item.retries >= item.maxRetries ? 'failed' : 'pending';
       item.errorMessage = errorMessage;
+      if (tipoError === 'transitorio') {
+        item.retries += 1;
+        item.status = item.retries >= item.maxRetries ? 'failed' : 'pending';
+        item.tipoError = 'transitorio';
+      } else {
+        item.status = 'failed';
+        item.retries = item.maxRetries;
+        item.tipoError = tipoError;
+      }
     });
 }
 
 /**
- * Marca una operación como fallida definitivamente (ej. por conflicto de idempotencia)
+ * Marca una operación con error transitorio (red, timeout, 5xx, 408, 429), incrementando
+ * reintentos. Permanece en 'pending' mientras retries < maxRetries, pasando a 'failed'
+ * solo al agotarse los reintentos.
+ */
+export async function markOperationTransientError(
+  id: number,
+  errorMessage: string,
+): Promise<void> {
+  await markOperationFailed(id, errorMessage, 'transitorio');
+}
+
+/**
+ * Marca una operación como fallida definitivamente por conflicto (ej. clave de idempotencia 409),
  * sin permitir nuevos reintentos automáticos.
  */
 export async function markOperationConflict(
@@ -218,12 +245,13 @@ export async function markOperationConflict(
       item.retries = item.maxRetries;
       item.status = 'failed';
       item.errorMessage = errorMessage;
+      item.tipoError = 'conflicto';
     });
 }
 
 /**
  * Reintenta una operación fallida: la vuelve a estado 'pending',
- * reinicia su contador de reintentos a 0 y borra el mensaje de error.
+ * reinicia su contador de reintentos a 0 y borra el mensaje de error y tipo.
  */
 export async function retryOperation(id: number): Promise<void> {
   await db.offline_queue
@@ -233,6 +261,7 @@ export async function retryOperation(id: number): Promise<void> {
       item.status = 'pending';
       item.retries = 0;
       item.errorMessage = undefined;
+      item.tipoError = undefined;
     });
 }
 
