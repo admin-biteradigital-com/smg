@@ -77,6 +77,7 @@ export default function ProductoFormPage() {
   const [nombre, setNombre] = useState('');
   const [codigoBarras, setCodigoBarras] = useState('');
   const [idUnidadBase, setIdUnidadBase] = useState<string>('');
+  const [unidadFactura, setUnidadFactura] = useState('');
   const [descripcion, setDescripcion] = useState('');
 
   // Campos: Precios (CLP)
@@ -130,6 +131,7 @@ export default function ProductoFormPage() {
             const prod = resProd.data;
             setNombre(prod.nombre || '');
             setCodigoBarras(prod.codigoBarras || '');
+            setUnidadFactura(prod.unidadFactura || '');
             const baseIdStr = prod.idUnidadBase ? String(prod.idUnidadBase) : '';
             setIdUnidadBase(baseIdStr);
             initialIdUnidadBase.current = baseIdStr;
@@ -364,6 +366,11 @@ export default function ProductoFormPage() {
         factorConversionCompra: validacionFactor.factor,
       });
 
+    if (unidadFactura.trim().length > 4) {
+      setErrorMsg('La unidad para la factura no puede exceder 4 caracteres.');
+      return;
+    }
+
     const payload = {
       nombre: cleanNombre,
       descripcion: descripcion.trim() || null,
@@ -376,6 +383,7 @@ export default function ProductoFormPage() {
       precioCosto: parseIntegerOrNull(precioCosto),
       precioPublico: parseIntegerOrNull(precioPublico),
       stockSeguridadMinimo: parseIntegerOrNull(stockSeguridadMinimo),
+      unidadFactura: unidadFactura.trim() || null,
       activo,
       visiblePublico,
     };
@@ -637,6 +645,29 @@ export default function ProductoFormPage() {
                       </p>
                     )}
                   </div>
+                </div>
+
+                {/* Unidad para la factura (DTE) */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-semibold text-zinc-300">
+                      Unidad para la factura <span className="text-zinc-500 font-normal">(Opcional)</span>
+                    </label>
+                    <span className="text-[10px] text-zinc-500 font-mono">
+                      {unidadFactura.length}/4
+                    </span>
+                  </div>
+                  <input
+                    type="text"
+                    maxLength={4}
+                    value={unidadFactura}
+                    onChange={(e) => setUnidadFactura(e.target.value)}
+                    placeholder="Ej: 25 o 120g"
+                    className="w-full px-3.5 py-2.5 bg-zinc-950 border border-zinc-800 focus:border-violet-500 rounded-xl text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none transition-colors"
+                  />
+                  <p className="text-[11px] text-zinc-400 mt-1">
+                    Se imprime junto a la cantidad, por ejemplo 25 o 120g. Si se deja vacío, no se imprime.
+                  </p>
                 </div>
 
                 {/* Descripción */}

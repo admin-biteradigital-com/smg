@@ -17,7 +17,10 @@ import {
   Mail,
   X,
   AlertTriangle,
+  Copy,
+  Receipt,
 } from 'lucide-react';
+import SelectorComuna from '@/components/gestion/SelectorComuna';
 import {
   getClienteById,
   createCliente,
@@ -44,6 +47,15 @@ const SEGMENTOS_OPTIONS: Array<{ value: SegmentoCliente | ''; label: string }> =
   { value: 'grande', label: 'Grande' },
   { value: 'mayorista', label: 'Mayorista' },
 ];
+
+/**
+ * Textos descriptivos en español para los datos fiscales faltantes que devuelve SIGLO.
+ */
+export const TEXTOS_DATOS_FISCALES_FALTANTES: Record<string, string> = {
+  giro: "Giro comercial (falta registrar o está 'Pendiente de confirmar')",
+  sucursales_sin_comuna: 'Una o más sucursales activas no tienen comuna asignada',
+  domicilio_tributario: 'Falta domicilio tributario (dirección y comuna) en el cliente o en sus sucursales',
+};
 
 export default function ClienteFormPage() {
   const navigate = useNavigate();
@@ -73,12 +85,20 @@ export default function ClienteFormPage() {
   const [cicloReabastecimientoDias, setCicloReabastecimientoDias] = useState<string>('');
   const [activo, setActivo] = useState<boolean>(true);
 
+  // Domicilio Tributario (Datos Fiscales Cliente)
+  const [clienteDireccion, setClienteDireccion] = useState('');
+  const [clienteComuna, setClienteComuna] = useState('');
+  const [clienteCiudad, setClienteCiudad] = useState('');
+  const [clienteCasillaIntercambio, setClienteCasillaIntercambio] = useState('');
+  const [datosFiscalesFaltantes, setDatosFiscalesFaltantes] = useState<string[]>([]);
+
   // Sucursales existentes (modo edición)
   const [sucursales, setSucursales] = useState<SucursalAdminItem[]>([]);
 
   // Sucursal Principal Inicial (solo modo creación)
   const [sucursalNombre, setSucursalNombre] = useState('Casa Matriz');
   const [sucursalDireccion, setSucursalDireccion] = useState('');
+  const [sucursalComuna, setSucursalComuna] = useState('');
   const [sucursalCiudad, setSucursalCiudad] = useState('');
   const [sucursalRegion, setSucursalRegion] = useState('Los Lagos');
   const [sucursalTelefono, setSucursalTelefono] = useState('');
@@ -90,6 +110,7 @@ export default function ClienteFormPage() {
   const [editandoSucursalId, setEditandoSucursalId] = useState<number | null>(null);
   const [formSucursalNombre, setFormSucursalNombre] = useState('');
   const [formSucursalDireccion, setFormSucursalDireccion] = useState('');
+  const [formSucursalComuna, setFormSucursalComuna] = useState('');
   const [formSucursalCiudad, setFormSucursalCiudad] = useState('');
   const [formSucursalRegion, setFormSucursalRegion] = useState('Los Lagos');
   const [formSucursalTelefono, setFormSucursalTelefono] = useState('');
@@ -123,6 +144,11 @@ export default function ClienteFormPage() {
             : ''
         );
         setActivo(cli.activo);
+        setClienteDireccion(cli.direccion || '');
+        setClienteComuna(cli.comuna || '');
+        setClienteCiudad(cli.ciudad || '');
+        setClienteCasillaIntercambio(cli.casillaIntercambio || '');
+        setDatosFiscalesFaltantes(cli.datosFiscalesFaltantes || []);
         setSucursales(cli.sucursales || []);
       }
     } catch (err: unknown) {
@@ -157,6 +183,26 @@ export default function ClienteFormPage() {
     }
   };
 
+  // Función para copiar domicilio tributario desde la sucursal principal
+  const handleCopiarDomicilioSucursalPrincipal = () => {
+    if (isEditing) {
+      const principal = sucursales.find((s) => s.esPrincipal) || sucursales[0];
+      if (principal) {
+        if (principal.direccion) setClienteDireccion(principal.direccion);
+        if (principal.comuna) setClienteComuna(principal.comuna);
+        if (principal.ciudad) setClienteCiudad(principal.ciudad);
+        setExitoMsg('Domicilio tributario copiado desde la sucursal principal.');
+      } else {
+        setErrorMsg('No hay sucursales registradas para copiar el domicilio tributario.');
+      }
+    } else {
+      if (sucursalDireccion) setClienteDireccion(sucursalDireccion);
+      if (sucursalComuna) setClienteComuna(sucursalComuna);
+      if (sucursalCiudad) setClienteCiudad(sucursalCiudad);
+      setExitoMsg('Domicilio tributario copiado desde la sucursal principal inicial.');
+    }
+  };
+
   // 2. Guardar Cliente (Crear / Actualizar)
   const handleSubmitCliente = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -182,6 +228,27 @@ export default function ClienteFormPage() {
       return;
     }
 
+    // Validaciones de domicilio tributario
+    if (clienteDireccion.trim().length > 70) {
+      setErrorMsg('La dirección del domicilio tributario no puede superar 70 caracteres.');
+      return;
+    }
+    if (clienteCiudad.trim().length > 20) {
+      setErrorMsg('La ciudad del domicilio tributario no puede superar 20 caracteres.');
+      return;
+    }
+    if (clienteCasillaIntercambio.trim().length > 80) {
+      setErrorMsg('La casilla de intercambio no puede superar 80 caracteres.');
+      return;
+    }
+    if (clienteCasillaIntercambio.trim()) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(clienteCasillaIntercambio.trim())) {
+        setErrorMsg('El formato de la casilla de intercambio no es válido.');
+        return;
+      }
+    }
+
     const limiteNum = Math.max(0, parseInt(limiteCredito.trim() || '0', 10) || 0);
     const plazoNum = Math.max(0, parseInt(plazoCreditoDias.trim() || '0', 10) || 0);
     const cicloNum = cicloReabastecimientoDias.trim()
@@ -191,6 +258,13 @@ export default function ClienteFormPage() {
     setGuardandoCliente(true);
 
     try {
+      const domicilioPayload = {
+        direccion: clienteDireccion.trim() || null,
+        comuna: clienteComuna.trim() || null,
+        ciudad: clienteCiudad.trim() || null,
+        casillaIntercambio: clienteCasillaIntercambio.trim() || null,
+      };
+
       if (isEditing && clienteId) {
         const payload: UpdateClientePayload = {
           razonSocial: cleanRazonSocial,
@@ -204,6 +278,7 @@ export default function ClienteFormPage() {
           plazoCreditoDias: plazoNum,
           cicloReabastecimientoDias: cicloNum,
           activo,
+          ...domicilioPayload,
         };
 
         await updateCliente(clienteId, payload);
@@ -213,12 +288,25 @@ export default function ClienteFormPage() {
         if (
           !sucursalNombre.trim() ||
           !sucursalDireccion.trim() ||
+          !sucursalComuna.trim() ||
           !sucursalCiudad.trim() ||
           !sucursalRegion.trim()
         ) {
           setErrorMsg(
-            'Debes completar los datos obligatorios (*) de la sucursal principal inicial.'
+            'Debes completar los datos obligatorios (*) de la sucursal principal inicial (incluida la comuna).'
           );
+          setGuardandoCliente(false);
+          return;
+        }
+
+        if (sucursalDireccion.trim().length > 70) {
+          setErrorMsg('La dirección de la sucursal no puede superar 70 caracteres.');
+          setGuardandoCliente(false);
+          return;
+        }
+
+        if (sucursalCiudad.trim().length > 20) {
+          setErrorMsg('La ciudad de la sucursal no puede superar 20 caracteres.');
           setGuardandoCliente(false);
           return;
         }
@@ -234,9 +322,11 @@ export default function ClienteFormPage() {
           limiteCredito: limiteNum,
           plazoCreditoDias: plazoNum,
           cicloReabastecimientoDias: cicloNum,
+          ...domicilioPayload,
           sucursalPrincipal: {
             nombre: sucursalNombre.trim(),
             direccion: sucursalDireccion.trim(),
+            comuna: sucursalComuna.trim(),
             ciudad: sucursalCiudad.trim(),
             region: sucursalRegion.trim(),
             telefono: sucursalTelefono.trim() || null,
@@ -256,12 +346,18 @@ export default function ClienteFormPage() {
       }
     } catch (err: unknown) {
       console.error('[ClienteFormPage] Error al guardar cliente:', err);
-      const msg =
-        err instanceof ApiRequestError
-          ? err.message
-          : err instanceof Error
-          ? err.message
-          : 'Error al guardar el cliente.';
+      let msg = 'Error al guardar el cliente.';
+      if (err instanceof ApiRequestError) {
+        if (err.code === 'COMUNA_INVALIDA') {
+          msg = 'La comuna ingresada no es válida según el catálogo oficial.';
+        } else if (err.code === 'REGION_NO_COINCIDE') {
+          msg = 'La región seleccionada no coincide con la comuna.';
+        } else {
+          msg = err.message;
+        }
+      } else if (err instanceof Error) {
+        msg = err.message;
+      }
       setErrorMsg(msg);
     } finally {
       setGuardandoCliente(false);
@@ -273,6 +369,7 @@ export default function ClienteFormPage() {
     setEditandoSucursalId(null);
     setFormSucursalNombre('');
     setFormSucursalDireccion('');
+    setFormSucursalComuna('');
     setFormSucursalCiudad(sucursalCiudad || '');
     setFormSucursalRegion(sucursalRegion || 'Los Lagos');
     setFormSucursalTelefono('');
@@ -287,6 +384,7 @@ export default function ClienteFormPage() {
     setEditandoSucursalId(s.id);
     setFormSucursalNombre(s.nombre || '');
     setFormSucursalDireccion(s.direccion || '');
+    setFormSucursalComuna(s.comuna || '');
     setFormSucursalCiudad(s.ciudad || '');
     setFormSucursalRegion(s.region || 'Los Lagos');
     setFormSucursalTelefono(s.telefono || '');
@@ -304,10 +402,21 @@ export default function ClienteFormPage() {
     if (
       !formSucursalNombre.trim() ||
       !formSucursalDireccion.trim() ||
+      !formSucursalComuna.trim() ||
       !formSucursalCiudad.trim() ||
       !formSucursalRegion.trim()
     ) {
-      setErrorSucursal('Completa todos los campos obligatorios (*) de la sucursal.');
+      setErrorSucursal('Completa todos los campos obligatorios (*) de la sucursal, incluida la comuna.');
+      return;
+    }
+
+    if (formSucursalDireccion.trim().length > 70) {
+      setErrorSucursal('La dirección de la sucursal no puede superar 70 caracteres.');
+      return;
+    }
+
+    if (formSucursalCiudad.trim().length > 20) {
+      setErrorSucursal('La ciudad de la sucursal no puede superar 20 caracteres.');
       return;
     }
 
@@ -319,6 +428,7 @@ export default function ClienteFormPage() {
         const payload: UpdateSucursalPayload = {
           nombre: formSucursalNombre.trim(),
           direccion: formSucursalDireccion.trim(),
+          comuna: formSucursalComuna.trim() || null,
           ciudad: formSucursalCiudad.trim(),
           region: formSucursalRegion.trim(),
           telefono: formSucursalTelefono.trim() || null,
@@ -333,6 +443,7 @@ export default function ClienteFormPage() {
         const payload: CreateSucursalPayload = {
           nombre: formSucursalNombre.trim(),
           direccion: formSucursalDireccion.trim(),
+          comuna: formSucursalComuna.trim(),
           ciudad: formSucursalCiudad.trim(),
           region: formSucursalRegion.trim(),
           telefono: formSucursalTelefono.trim() || null,
@@ -349,12 +460,18 @@ export default function ClienteFormPage() {
       await loadClienteData();
     } catch (err: unknown) {
       console.error('[ClienteFormPage] Error al guardar sucursal:', err);
-      const msg =
-        err instanceof ApiRequestError
-          ? err.message
-          : err instanceof Error
-          ? err.message
-          : 'Error al guardar la sucursal.';
+      let msg = 'Error al guardar la sucursal.';
+      if (err instanceof ApiRequestError) {
+        if (err.code === 'COMUNA_INVALIDA') {
+          msg = 'La comuna ingresada no es válida según el catálogo oficial.';
+        } else if (err.code === 'REGION_NO_COINCIDE') {
+          msg = 'La región no coincide con la comuna seleccionada.';
+        } else {
+          msg = err.message;
+        }
+      } else if (err instanceof Error) {
+        msg = err.message;
+      }
       setErrorSucursal(msg);
     } finally {
       setGuardandoSucursal(false);
@@ -449,6 +566,28 @@ export default function ClienteFormPage() {
                 <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
                 <p className="leading-relaxed">{exitoMsg}</p>
               </div>
+            )}
+
+            {/* Aviso de Datos Fiscales Faltantes (SIGLO) */}
+            {isEditing && datosFiscalesFaltantes.length > 0 && (
+              <section className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-xs text-amber-200 animate-fade-in space-y-2">
+                <div className="flex items-start gap-2.5">
+                  <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                  <div className="flex-1 space-y-1">
+                    <p className="font-bold text-amber-300">
+                      Datos fiscales incompletos para facturación electrónica (SII)
+                    </p>
+                    <p className="text-zinc-300 leading-relaxed text-[11px]">
+                      Para emitir facturas electrónicas a este cliente sin rechazos del SII, completa los siguientes datos:
+                    </p>
+                    <ul className="list-disc pl-4 space-y-0.5 text-amber-200/90 pt-1 text-[11px]">
+                      {datosFiscalesFaltantes.map((f) => (
+                        <li key={f}>{TEXTOS_DATOS_FISCALES_FALTANTES[f] || f}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </section>
             )}
 
             {/* SECCIÓN 1: Identificación y Datos Generales */}
@@ -634,6 +773,108 @@ export default function ClienteFormPage() {
               </div>
             </section>
 
+            {/* SECCIÓN 1C: Domicilio Tributario (Facturación Electrónica) */}
+            <section className="bg-zinc-900/60 border border-zinc-800 rounded-3xl p-5 space-y-4">
+              <div className="border-b border-zinc-800 pb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                  <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                    <Receipt className="w-4 h-4 text-blue-400" />
+                    Domicilio Tributario
+                  </h2>
+                  <p className="text-[11px] text-zinc-400 mt-0.5">
+                    Dirección fiscal del cliente para facturación electrónica (DTE).
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleCopiarDomicilioSucursalPrincipal}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600/15 hover:bg-blue-600/25 border border-blue-500/30 text-blue-300 text-xs font-bold transition-all active:scale-95 shrink-0 self-start sm:self-auto shadow-sm"
+                  title="Copiar dirección, comuna y ciudad desde la sucursal principal"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>Copiar de la sucursal principal</span>
+                </button>
+              </div>
+
+              <div className="space-y-3.5">
+                {/* Dirección */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-semibold text-zinc-300">
+                      Dirección Tributaria
+                    </label>
+                    <span className="text-[10px] text-zinc-500 font-mono">
+                      {clienteDireccion.length}/70
+                    </span>
+                  </div>
+                  <input
+                    type="text"
+                    maxLength={70}
+                    value={clienteDireccion}
+                    onChange={(e) => setClienteDireccion(e.target.value)}
+                    placeholder="Ej: Av. Diego Portales 1234"
+                    className="w-full px-3.5 py-2.5 bg-zinc-950 border border-zinc-800 focus:border-blue-500 rounded-xl text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none transition-colors"
+                  />
+                </div>
+
+                {/* Comuna y Ciudad */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <SelectorComuna
+                    label="Comuna Tributaria"
+                    value={clienteComuna}
+                    placeholder="Buscar comuna..."
+                    onChange={(comunaNom) => setClienteComuna(comunaNom)}
+                  />
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="block text-xs font-semibold text-zinc-300">
+                        Ciudad
+                      </label>
+                      <span className="text-[10px] text-zinc-500 font-mono">
+                        {clienteCiudad.length}/20
+                      </span>
+                    </div>
+                    <input
+                      type="text"
+                      maxLength={20}
+                      value={clienteCiudad}
+                      onChange={(e) => setClienteCiudad(e.target.value)}
+                      placeholder="Ej: Puerto Montt"
+                      className="w-full px-3.5 py-2.5 bg-zinc-950 border border-zinc-800 focus:border-blue-500 rounded-xl text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none transition-colors"
+                    />
+                  </div>
+                </div>
+
+                {/* Casilla de Intercambio DTE */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-semibold text-zinc-300">
+                      Casilla de Intercambio (DTE) <span className="text-zinc-500 font-normal">(Opcional)</span>
+                    </label>
+                    <span className="text-[10px] text-zinc-500 font-mono">
+                      {clienteCasillaIntercambio.length}/80
+                    </span>
+                  </div>
+                  <div className="relative">
+                    <Mail className="w-4 h-4 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="email"
+                      maxLength={80}
+                      value={clienteCasillaIntercambio}
+                      onChange={(e) => setClienteCasillaIntercambio(e.target.value)}
+                      placeholder="dte@cliente.cl"
+                      className="w-full pl-10 pr-3.5 py-2.5 bg-zinc-950 border border-zinc-800 focus:border-blue-500 rounded-xl text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none transition-colors"
+                    />
+                  </div>
+                  <p className="text-[10px] text-zinc-500 mt-1">
+                    Casilla de correo del cliente para recepción automática de facturas electrónicas.
+                  </p>
+                </div>
+              </div>
+            </section>
+
             {/* SECCIÓN 2: Condiciones Comerciales y Crédito */}
             <section className="bg-zinc-900/60 border border-zinc-800 rounded-3xl p-5 space-y-4">
               <div className="border-b border-zinc-800 pb-3">
@@ -761,12 +1002,18 @@ export default function ClienteFormPage() {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
-                      Dirección <span className="text-blue-400">*</span>
-                    </label>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="block text-xs font-semibold text-zinc-300">
+                        Dirección <span className="text-blue-400">*</span>
+                      </label>
+                      <span className="text-[10px] text-zinc-500 font-mono">
+                        {sucursalDireccion.length}/70
+                      </span>
+                    </div>
                     <input
                       type="text"
                       required
+                      maxLength={70}
                       value={sucursalDireccion}
                       onChange={(e) => setSucursalDireccion(e.target.value)}
                       placeholder="Ej: Av. Diego Portales 1234"
@@ -774,34 +1021,52 @@ export default function ClienteFormPage() {
                     />
                   </div>
 
+                  {/* Comuna y Región */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                    <div>
-                      <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
-                        Ciudad / Comuna <span className="text-blue-400">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={sucursalCiudad}
-                        onChange={(e) => setSucursalCiudad(e.target.value)}
-                        placeholder="Ej: Puerto Montt"
-                        className="w-full px-3.5 py-2.5 bg-zinc-950 border border-zinc-800 focus:border-blue-500 rounded-xl text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none transition-colors"
-                      />
-                    </div>
+                    <SelectorComuna
+                      label="Comuna"
+                      required
+                      value={sucursalComuna}
+                      placeholder="Buscar comuna..."
+                      onChange={(nuevaComuna, nuevaRegion) => {
+                        setSucursalComuna(nuevaComuna);
+                        setSucursalRegion(nuevaRegion);
+                      }}
+                    />
 
                     <div>
                       <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
-                        Región <span className="text-blue-400">*</span>
+                        Región <span className="text-zinc-500 font-normal">(Derivada)</span>
                       </label>
                       <input
                         type="text"
-                        required
+                        disabled
                         value={sucursalRegion}
-                        onChange={(e) => setSucursalRegion(e.target.value)}
-                        placeholder="Ej: Los Lagos"
-                        className="w-full px-3.5 py-2.5 bg-zinc-950 border border-zinc-800 focus:border-blue-500 rounded-xl text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none transition-colors"
+                        placeholder="Se autocompleta con la comuna"
+                        className="w-full px-3.5 py-2.5 bg-zinc-900/50 border border-zinc-800 rounded-xl text-xs text-zinc-300 focus:outline-none cursor-not-allowed"
                       />
                     </div>
+                  </div>
+
+                  {/* Ciudad */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="block text-xs font-semibold text-zinc-300">
+                        Ciudad <span className="text-blue-400">*</span>
+                      </label>
+                      <span className="text-[10px] text-zinc-500 font-mono">
+                        {sucursalCiudad.length}/20
+                      </span>
+                    </div>
+                    <input
+                      type="text"
+                      required
+                      maxLength={20}
+                      value={sucursalCiudad}
+                      onChange={(e) => setSucursalCiudad(e.target.value)}
+                      placeholder="Ej: Puerto Montt"
+                      className="w-full px-3.5 py-2.5 bg-zinc-950 border border-zinc-800 focus:border-blue-500 rounded-xl text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none transition-colors"
+                    />
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
@@ -911,12 +1176,18 @@ export default function ClienteFormPage() {
                       </div>
 
                       <div>
-                        <label className="block text-[11px] font-semibold text-zinc-300 mb-1">
-                          Dirección <span className="text-blue-400">*</span>
-                        </label>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="block text-[11px] font-semibold text-zinc-300">
+                            Dirección <span className="text-blue-400">*</span>
+                          </label>
+                          <span className="text-[10px] text-zinc-500 font-mono">
+                            {formSucursalDireccion.length}/70
+                          </span>
+                        </div>
                         <input
                           type="text"
                           required
+                          maxLength={70}
                           value={formSucursalDireccion}
                           onChange={(e) => setFormSucursalDireccion(e.target.value)}
                           placeholder="Ej: Av. Juan Soler Manfredini 456"
@@ -924,34 +1195,66 @@ export default function ClienteFormPage() {
                         />
                       </div>
 
+                      {/* Comuna y Región */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                          <label className="block text-[11px] font-semibold text-zinc-300 mb-1">
-                            Ciudad / Comuna <span className="text-blue-400">*</span>
-                          </label>
-                          <input
-                            type="text"
-                            required
-                            value={formSucursalCiudad}
-                            onChange={(e) => setFormSucursalCiudad(e.target.value)}
-                            placeholder="Ej: Puerto Varas"
-                            className="w-full px-3 py-2 bg-zinc-900 border border-zinc-800 focus:border-blue-500 rounded-xl text-xs text-zinc-100 focus:outline-none"
-                          />
-                        </div>
+                        <SelectorComuna
+                          label="Comuna"
+                          required
+                          value={formSucursalComuna}
+                          placeholder="Buscar comuna..."
+                          onChange={(nuevaComuna, nuevaRegion) => {
+                            setFormSucursalComuna(nuevaComuna);
+                            setFormSucursalRegion(nuevaRegion);
+                          }}
+                        />
 
                         <div>
                           <label className="block text-[11px] font-semibold text-zinc-300 mb-1">
-                            Región <span className="text-blue-400">*</span>
+                            Región <span className="text-zinc-500 font-normal">(Derivada)</span>
                           </label>
                           <input
                             type="text"
-                            required
+                            disabled
                             value={formSucursalRegion}
-                            onChange={(e) => setFormSucursalRegion(e.target.value)}
-                            placeholder="Ej: Los Lagos"
-                            className="w-full px-3 py-2 bg-zinc-900 border border-zinc-800 focus:border-blue-500 rounded-xl text-xs text-zinc-100 focus:outline-none"
+                            placeholder="Se autocompleta con la comuna"
+                            className="w-full px-3 py-2 bg-zinc-900/50 border border-zinc-800 rounded-xl text-xs text-zinc-400 focus:outline-none cursor-not-allowed"
                           />
                         </div>
+                      </div>
+
+                      {/* Ciudad con manejo de sobre-largo (> 20 chars sin bloquear) */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="block text-[11px] font-semibold text-zinc-300">
+                            Ciudad <span className="text-blue-400">*</span>
+                          </label>
+                          <span
+                            className={`text-[10px] font-mono ${
+                              formSucursalCiudad.length > 20
+                                ? 'text-rose-400 font-bold'
+                                : 'text-zinc-500'
+                            }`}
+                          >
+                            {formSucursalCiudad.length}/20
+                          </span>
+                        </div>
+                        <input
+                          type="text"
+                          required
+                          value={formSucursalCiudad}
+                          onChange={(e) => setFormSucursalCiudad(e.target.value)}
+                          placeholder="Ej: Puerto Varas"
+                          className={`w-full px-3 py-2 bg-zinc-900 border rounded-xl text-xs text-zinc-100 focus:outline-none ${
+                            formSucursalCiudad.length > 20
+                              ? 'border-rose-500/80 focus:border-rose-400'
+                              : 'border-zinc-800 focus:border-blue-500'
+                          }`}
+                        />
+                        {formSucursalCiudad.length > 20 && (
+                          <p className="text-[11px] text-rose-400 mt-1 leading-tight">
+                            La ciudad supera los 20 caracteres ({formSucursalCiudad.length}/20). Ajusta el texto (ej: "Hornopirén" con comuna "Hualaihué") para poder guardar.
+                          </p>
+                        )}
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1084,12 +1387,19 @@ export default function ClienteFormPage() {
                             </div>
 
                             {/* Fila 2: Dirección y Comuna */}
-                            <p className="text-xs text-zinc-300 flex items-center gap-1 mt-1">
+                            <p className="text-xs text-zinc-300 flex items-center gap-1 mt-1 flex-wrap">
                               <MapPin className="w-3 h-3 text-zinc-500 shrink-0" />
                               <span>
-                                {s.direccion}, {s.ciudad}
-                                {s.region ? ` (${s.region})` : ''}
+                                {s.direccion}
+                                {s.comuna ? `, ${s.comuna}` : ''}
+                                {s.ciudad && s.ciudad !== s.comuna ? ` (${s.ciudad})` : ''}
+                                {s.region ? ` · ${s.region}` : ''}
                               </span>
+                              {!s.comuna && (
+                                <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/30 px-1.5 py-0.5 rounded ml-1">
+                                  Sin comuna
+                                </span>
+                              )}
                             </p>
 
                             {/* Contacto / Observaciones */}

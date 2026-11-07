@@ -434,6 +434,12 @@ export interface VentaPendiente {
 
 // ── ADR-014: Empresa / Modo Gestión ──────────────────────────────────────────
 
+export interface ComunaItem {
+  codigo: string;
+  nombre: string;
+  region: string;
+}
+
 export interface EmpresaPerfil {
   id: number;
   nombreEmpresa: string;
@@ -451,6 +457,16 @@ export interface EmpresaPerfil {
   estadoOperacion: 'configurando' | 'activa' | 'suspendida';
   fechaAlta: string;
   camposMinimosCompletos: boolean;
+  actecos?: number[] | null;
+  cdgSiiSucur?: number | null;
+  unidadSii?: string | null;
+  nroResolucion?: number | null;
+  fechaResolucion?: string | null;
+  casillaIntercambio?: string | null;
+  facturacionElectronica?: {
+    completo: boolean;
+    faltantes: string[];
+  };
 }
 
 export interface UpdateEmpresaPayload {
@@ -465,6 +481,12 @@ export interface UpdateEmpresaPayload {
   emailContacto?: string | null;
   dominioWeb?: string | null;
   logoUrl?: string | null;
+  actecos?: number[] | null;
+  cdgSiiSucur?: number | null;
+  unidadSii?: string | null;
+  nroResolucion?: number | null;
+  fechaResolucion?: string | null;
+  casillaIntercambio?: string | null;
 }
 
 // ── ADR-014 Entrega B: Empleados, Vehículos y Rutas ──────────────────────────
@@ -526,6 +548,7 @@ export interface ProductoAdminItem {
   idUnidadCompra?: number | null;
   nombreUnidadCompra?: string | null;
   factorConversionCompra?: number | null;
+  unidadFactura?: string | null;
 }
 
 // ── ADR-019: Relación Producto - Proveedor ───────────────────────────────────
@@ -565,6 +588,7 @@ export interface SucursalPrincipalInfo {
   codigo: string;
   nombre: string;
   direccion: string;
+  comuna?: string | null;
   ciudad: string;
   region: string;
   telefono: string | null;
@@ -584,8 +608,13 @@ export interface ClienteAdminItem {
   plazoCreditoDias: number;
   cicloReabastecimientoDias: number | null;
   activo: boolean;
+  direccion?: string | null;
+  comuna?: string | null;
+  ciudad?: string | null;
+  casillaIntercambio?: string | null;
   sucursalPrincipal: SucursalPrincipalInfo | null;
   saldoPendiente?: number;
+  datosFiscalesFaltantes?: string[];
 }
 
 export interface SucursalAdminItem {
@@ -594,6 +623,7 @@ export interface SucursalAdminItem {
   codigo: string;
   nombre: string;
   direccion: string;
+  comuna: string | null;
   ciudad: string;
   region: string;
   telefono: string | null;
@@ -618,6 +648,11 @@ export interface ClienteAdminDetalle {
   plazoCreditoDias: number;
   cicloReabastecimientoDias: number | null;
   activo: boolean;
+  direccion?: string | null;
+  comuna?: string | null;
+  ciudad?: string | null;
+  casillaIntercambio?: string | null;
+  datosFiscalesFaltantes?: string[];
   sucursales: SucursalAdminItem[];
 }
 
@@ -632,9 +667,14 @@ export interface CreateClientePayload {
   limiteCredito?: number;
   plazoCreditoDias?: number;
   cicloReabastecimientoDias?: number | null;
+  direccion?: string | null;
+  comuna?: string | null;
+  ciudad?: string | null;
+  casillaIntercambio?: string | null;
   sucursalPrincipal: {
     nombre: string;
     direccion: string;
+    comuna: string;
     ciudad: string;
     region: string;
     telefono?: string | null;
@@ -656,12 +696,17 @@ export interface UpdateClientePayload {
   limiteCredito?: number;
   plazoCreditoDias?: number;
   cicloReabastecimientoDias?: number | null;
+  direccion?: string | null;
+  comuna?: string | null;
+  ciudad?: string | null;
+  casillaIntercambio?: string | null;
   activo?: boolean;
 }
 
 export interface CreateSucursalPayload {
   nombre: string;
   direccion: string;
+  comuna: string;
   ciudad: string;
   region: string;
   telefono?: string | null;
@@ -675,6 +720,7 @@ export interface CreateSucursalPayload {
 export interface UpdateSucursalPayload {
   nombre?: string;
   direccion?: string;
+  comuna?: string | null;
   ciudad?: string;
   region?: string;
   telefono?: string | null;

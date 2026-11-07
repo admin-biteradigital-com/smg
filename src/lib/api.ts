@@ -1,5 +1,6 @@
 import type {
   ApiResponse,
+  ComunaItem,
   Vehiculo,
   Ruta,
   Jornada,
@@ -424,6 +425,33 @@ export async function getCobrosDeVenta<T = unknown>(
   ventaId: number | string
 ): Promise<ApiResponse<T>> {
   return api.get<ApiResponse<T>>(`/api/v1/ventas/${ventaId}/cobros`);
+}
+
+// ─── Catálogos Oficiales (ADR-021 / DTE) ──────────────────────────────────────
+
+let comunasCache: ComunaItem[] | null = null;
+
+/**
+ * Obtiene el catálogo oficial de comunas y regiones de Chile (346 comunas, 16 regiones).
+ * Utiliza caché en memoria para realizar a lo sumo una petición de red por sesión de navegador.
+ * Endpoint: GET /api/v1/catalogos/comunas
+ */
+export async function getComunas(): Promise<ApiResponse<ComunaItem[]>> {
+  if (comunasCache) {
+    return { data: comunasCache };
+  }
+  const res = await api.get<ApiResponse<ComunaItem[]>>('/api/v1/catalogos/comunas');
+  if (res?.data && Array.isArray(res.data)) {
+    comunasCache = res.data;
+  }
+  return res;
+}
+
+/**
+ * Helper para pruebas unitarias: limpia la caché en memoria del catálogo de comunas.
+ */
+export function _clearComunasCacheForTests(): void {
+  comunasCache = null;
 }
 
 // ─── ADR-014: Empresa / Administración ────────────────────────────────────────

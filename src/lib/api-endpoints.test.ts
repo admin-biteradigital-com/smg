@@ -17,6 +17,8 @@ import {
   getClientesSaldosPendientes,
   getVentasPendientesByCliente,
   getCobrosDeVenta,
+  getComunas,
+  _clearComunasCacheForTests,
 } from '@/lib/api';
 
 describe('ADR-017 Lote 1: Endpoints en Español (/salud, /panel, /configuracion/publica)', () => {
@@ -190,8 +192,9 @@ describe('ADR-017 Lote 3: Clientes y Sucursales en Español (/clientes)', () => 
       sucursalPrincipal: {
         nombre: 'Casa Matriz',
         direccion: 'Av Central 123',
+        comuna: 'Santiago',
         ciudad: 'Santiago',
-        region: 'Metropolitana',
+        region: 'Metropolitana de Santiago',
       },
     };
     await createCliente(payload);
@@ -209,6 +212,7 @@ describe('ADR-017 Lote 3: Clientes y Sucursales en Español (/clientes)', () => 
     const sucursalPayload = {
       nombre: 'Sucursal Norte',
       direccion: 'Av Norte 456',
+      comuna: 'Antofagasta',
       ciudad: 'Antofagasta',
       region: 'Antofagasta',
     };
@@ -244,5 +248,30 @@ describe('ADR-017 Lote 5: Ventas, Cobros y Saldos en Español (/ventas)', () => 
     const getSpy = vi.spyOn(api, 'get').mockResolvedValueOnce({ data: [] } as any);
     await getCobrosDeVenta(44);
     expect(getSpy).toHaveBeenCalledWith('/api/v1/ventas/44/cobros');
+  });
+});
+
+describe('ADR-021: Catálogo de Comunas y Regiones (/catalogos/comunas)', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    _clearComunasCacheForTests();
+  });
+
+  it('getComunas() consulta GET /api/v1/catalogos/comunas y utiliza caché en memoria', async () => {
+    const mockComunas = [
+      { codigo: '10101', nombre: 'Puerto Montt', region: 'Los Lagos' },
+      { codigo: '10104', nombre: 'Puerto Varas', region: 'Los Lagos' },
+    ];
+    const getSpy = vi.spyOn(api, 'get').mockResolvedValueOnce({ data: mockComunas } as any);
+
+    const res1 = await getComunas();
+    expect(res1.data).toEqual(mockComunas);
+    expect(getSpy).toHaveBeenCalledTimes(1);
+    expect(getSpy).toHaveBeenCalledWith('/api/v1/catalogos/comunas');
+
+    // Segunda llamada en la misma sesión debe responder de caché sin nueva petición HTTP
+    const res2 = await getComunas();
+    expect(res2.data).toEqual(mockComunas);
+    expect(getSpy).toHaveBeenCalledTimes(1);
   });
 });

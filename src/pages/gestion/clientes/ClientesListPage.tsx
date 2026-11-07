@@ -343,6 +343,11 @@ export default function ClientesListPage() {
                           <AlertTriangle className="w-2.5 h-2.5" /> Giro pendiente
                         </span>
                       )}
+                      {cli.datosFiscalesFaltantes && cli.datosFiscalesFaltantes.length > 0 && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-md">
+                          <AlertTriangle className="w-2.5 h-2.5" /> Datos fiscales incompletos
+                        </span>
+                      )}
                     </div>
 
                     {/* Fila 2: RUT + Dirección Principal */}
